@@ -82,7 +82,7 @@ export default function NavBar({ employee, pendingCount: initialCount = 0 }: Nav
                   }`}
                 >
                   {link.label}
-                  {'badge' in link && link.badge > 0 && (
+                  {link.badge !== undefined && link.badge > 0 && (
                     <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
                       {link.badge > 9 ? '9+' : link.badge}
                     </span>
