@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import NavBar from '@/components/ui/NavBar'
 import ShiftCalendarClient from '@/components/calendar/ShiftCalendarClient'
+import OnboardingBanner from '@/components/ui/OnboardingBanner'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -61,9 +62,17 @@ export default async function DashboardPage() {
     <div className="min-h-screen flex flex-col">
       <NavBar employee={employee} />
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
+        <OnboardingBanner role={employee.role as 'employee' | 'manager'} />
+
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Available Shifts</h1>
-          <p className="text-sm text-gray-500 mt-1">Browse and request upcoming shifts</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {employee.role === 'manager' ? 'All Shifts' : 'Available Shifts'}
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {employee.role === 'manager'
+              ? 'Overview of all shifts. Go to Shifts in the menu to create and manage them.'
+              : 'Browse and request upcoming shifts below'}
+          </p>
         </div>
 
         <ShiftCalendarClient

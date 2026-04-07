@@ -36,6 +36,23 @@ export default async function ManagerShiftsPage() {
     <div className="min-h-screen flex flex-col">
       <NavBar employee={employee} />
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
+
+        {/* Quick how-to if no shifts yet */}
+        {shiftsWithCounts.length === 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-6">
+            <h2 className="font-semibold text-blue-900 mb-1">Create your first shift</h2>
+            <p className="text-sm text-blue-700 mb-3">
+              Shifts you create will appear here. Employees can only see and request shifts you <strong>publish</strong>.
+            </p>
+            <div className="flex gap-6 text-sm text-blue-800">
+              <span>1. Click <strong>+ New Shift</strong></span>
+              <span>2. Fill in the details</span>
+              <span>3. Tick <strong>Publish immediately</strong> or publish later</span>
+              <span>4. Employees can then request it</span>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Manage Shifts</h1>
