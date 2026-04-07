@@ -20,10 +20,23 @@ export default async function ManagerRequestsPage() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  const { data: requests } = await admin
+  // Fetch requests, employees and shifts separately to avoid join issues
+  const { data: rawRequests } = await admin
     .from('shift_requests')
-    .select('*, employee:employees(*), shift:shifts(*)')
+    .select('*')
     .order('created_at', { ascending: false })
+
+  const { data: employees } = await admin.from('employees').select('*')
+  const { data: shifts } = await admin.from('shifts').select('*')
+
+  const employeeMap = Object.fromEntries((employees ?? []).map(e => [e.id, e]))
+  const shiftMap = Object.fromEntries((shifts ?? []).map(s => [s.id, s]))
+
+  const requests = (rawRequests ?? []).map(r => ({
+    ...r,
+    employee: employeeMap[r.employee_id] ?? null,
+    shift: shiftMap[r.shift_id] ?? null,
+  }))
 
   return (
     <div className="min-h-screen flex flex-col">
