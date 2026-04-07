@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import NavBar from '@/components/ui/NavBar'
 import ManagerRequestsClient from '@/components/manager/ManagerRequestsClient'
@@ -11,7 +12,13 @@ export default async function ManagerRequestsPage() {
   const { data: employee } = await supabase.from('employees').select('*').eq('id', user.id).single()
   if (!employee || employee.role !== 'manager') redirect('/dashboard')
 
-  const { data: requests } = await supabase
+  // Use admin client to bypass RLS — manager role already verified above
+  const admin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
+  const { data: requests } = await admin
     .from('shift_requests')
     .select('*, employee:employees(*), shift:shifts(*)')
     .order('created_at', { ascending: false })
