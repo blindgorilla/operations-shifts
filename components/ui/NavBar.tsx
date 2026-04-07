@@ -10,29 +10,30 @@ import type { Employee } from '@/types'
 
 interface NavBarProps {
   employee: Employee
+  pendingCount?: number
 }
 
-export default function NavBar({ employee }: NavBarProps) {
+export default function NavBar({ employee, pendingCount: initialCount = 0 }: NavBarProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const [pendingCount, setPendingCount] = useState(0)
+  const [pendingCount, setPendingCount] = useState(initialCount)
 
-  // Fetch pending requests count for managers via API (bypasses RLS)
+  // Poll for updates every 30 seconds
   useEffect(() => {
     if (employee.role !== 'manager') return
+    setPendingCount(initialCount)
 
     async function fetchPending() {
-      const res = await fetch('/api/pending-count')
-      const data = await res.json()
-      setPendingCount(data.count ?? 0)
+      try {
+        const res = await fetch('/api/pending-count', { credentials: 'include' })
+        const data = await res.json()
+        setPendingCount(data.count ?? 0)
+      } catch {}
     }
 
-    fetchPending()
-
-    // Refresh count every 30 seconds
     const interval = setInterval(fetchPending, 30000)
     return () => clearInterval(interval)
-  }, [employee.role])
+  }, [employee.role, initialCount])
 
   async function handleSignOut() {
     const supabase = createClient()
@@ -40,19 +41,21 @@ export default function NavBar({ employee }: NavBarProps) {
     router.push('/auth/login')
   }
 
-  const employeeLinks = [
+  type NavLink = { href: string; label: string; badge?: number }
+
+  const employeeLinks: NavLink[] = [
     { href: '/dashboard', label: 'Calendar' },
     { href: '/my-requests', label: 'My Requests' },
   ]
 
-  const managerLinks = [
+  const managerLinks: NavLink[] = [
     { href: '/manager/shifts', label: 'Shifts' },
     { href: '/manager/requests', label: 'Requests', badge: pendingCount },
     { href: '/manager/employees', label: 'Employees' },
     { href: '/manager/holidays', label: 'Holidays' },
   ]
 
-  const links = employee.role === 'manager' ? [...employeeLinks, ...managerLinks] : employeeLinks
+  const links: NavLink[] = employee.role === 'manager' ? [...employeeLinks, ...managerLinks] : employeeLinks
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">

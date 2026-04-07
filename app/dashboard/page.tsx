@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import NavBar from '@/components/ui/NavBar'
 import ShiftCalendarClient from '@/components/calendar/ShiftCalendarClient'
@@ -60,9 +61,23 @@ export default async function DashboardPage() {
   const requestedShiftIds = new Set((myRequests ?? []).map((r) => r.shift_id))
   const assignedShiftIds = new Set((myAssignments ?? []).map((a) => a.shift_id))
 
+  // Pending count for manager badge
+  let pendingCount = 0
+  if (employee.role === 'manager') {
+    const admin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+    const { count } = await admin
+      .from('shift_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending')
+    pendingCount = count ?? 0
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
-      <NavBar employee={employee} />
+      <NavBar employee={employee} pendingCount={pendingCount} />
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
         <OnboardingBanner role={employee.role as 'employee' | 'manager'} />
 

@@ -38,9 +38,11 @@ export default async function ManagerRequestsPage() {
     shift: shiftMap[r.shift_id] ?? null,
   }))
 
+  const pendingCount = (rawRequests ?? []).filter(r => r.status === 'pending').length
+
   return (
     <div className="min-h-screen flex flex-col">
-      <NavBar employee={employee} />
+      <NavBar employee={employee} pendingCount={pendingCount} />
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Shift Requests</h1>
