@@ -6,6 +6,8 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Employee } from '@/types'
 
+
+
 interface NavBarProps {
   employee: Employee
 }
@@ -15,17 +17,14 @@ export default function NavBar({ employee }: NavBarProps) {
   const router = useRouter()
   const [pendingCount, setPendingCount] = useState(0)
 
-  // Fetch pending requests count for managers
+  // Fetch pending requests count for managers via API (bypasses RLS)
   useEffect(() => {
     if (employee.role !== 'manager') return
 
     async function fetchPending() {
-      const supabase = createClient()
-      const { count } = await supabase
-        .from('shift_requests')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending')
-      setPendingCount(count ?? 0)
+      const res = await fetch('/api/pending-count')
+      const data = await res.json()
+      setPendingCount(data.count ?? 0)
     }
 
     fetchPending()
