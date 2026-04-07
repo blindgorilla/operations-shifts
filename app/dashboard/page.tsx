@@ -4,6 +4,8 @@ import NavBar from '@/components/ui/NavBar'
 import ShiftCalendarClient from '@/components/calendar/ShiftCalendarClient'
 import OnboardingBanner from '@/components/ui/OnboardingBanner'
 
+export const dynamic = 'force-dynamic'
+
 export default async function DashboardPage() {
   const supabase = await createClient()
 

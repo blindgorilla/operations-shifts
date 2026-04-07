@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation'
 import NavBar from '@/components/ui/NavBar'
 import ManagerRequestsClient from '@/components/manager/ManagerRequestsClient'
 
+export const dynamic = 'force-dynamic'
+
 export default async function ManagerRequestsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

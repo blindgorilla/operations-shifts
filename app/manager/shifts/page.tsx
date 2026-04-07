@@ -4,6 +4,8 @@ import NavBar from '@/components/ui/NavBar'
 import Link from 'next/link'
 import ManagerShiftsClient from '@/components/manager/ManagerShiftsClient'
 
+export const dynamic = 'force-dynamic'
+
 export default async function ManagerShiftsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
