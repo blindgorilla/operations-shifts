@@ -42,7 +42,43 @@ export async function sendApprovalEmail(employee: Employee, shift: Shift, manage
   await resend.emails.send({ from: FROM, to: employee.email, subject, html })
 }
 
-export async function sendDenialEmail(employee: Employee, shift: Shift, managerNote?: string | null) {
+export async function sendNewRequestEmail(managers: Employee[], employee: Employee, shift: Shift) {
+  const subject = `New Shift Request — ${employee.name} · ${formatShiftDate(shift)}`
+
+  const html = `
+    <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; color: #111;">
+      <div style="background:#2563eb;padding:20px 24px;border-radius:8px 8px 0 0;">
+        <h2 style="color:#fff;margin:0;font-size:18px;">New Shift Request</h2>
+      </div>
+      <div style="border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 8px 8px;">
+        <p style="margin:0 0 16px;"><strong>${employee.name}</strong> has requested a shift and is awaiting your approval.</p>
+
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:16px;margin-bottom:16px;">
+          <p style="margin:0 0 4px;font-weight:600;">${formatShiftDate(shift)}</p>
+          <p style="margin:0;color:#374151;">${shiftLabel(shift)}</p>
+          ${shift.role_required ? `<p style="margin:4px 0 0;color:#6b7280;font-size:14px;">Role: ${shift.role_required}</p>` : ''}
+        </div>
+
+        <a href="${process.env.NEXT_PUBLIC_APP_URL}/manager/requests"
+           style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;font-weight:600;font-size:14px;padding:10px 20px;border-radius:8px;">
+          Review Request
+        </a>
+
+        <p style="margin:16px 0 0;font-size:13px;color:#9ca3af;">Log in to Operations Shifts to approve or deny this request.</p>
+      </div>
+    </div>
+  `
+
+  if (managers.length === 0) return
+
+  await resend.emails.send({
+    from: FROM,
+    to: managers.map(m => m.email),
+    subject,
+    html,
+  })
+}
+
   const subject = `Shift Request Update — ${formatShiftDate(shift)}`
 
   const html = `
