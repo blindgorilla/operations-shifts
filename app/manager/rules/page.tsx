@@ -17,6 +17,36 @@ export default function RulesPage() {
     parameters: '{}'
   })
 
+  const getRuleType = (rule: SchedulingRule) => {
+    if (rule.name === 'fairness_info' || rule.name === 'night_rest_preference') return 'Advisory'
+    if (rule.severity === 'error') return 'Hard Rule'
+    return 'Soft Rule'
+  }
+
+  const getRuleAffects = (rule: SchedulingRule) => {
+    switch (rule.name) {
+      case 'headcount':
+      case 'min_rest':
+      case 'night_followup':
+      case 'new_employee_pairing':
+        return 'Shift assignment'
+      case 'consecutive_days':
+        return 'Schedule validation'
+      case 'night_rest_preference':
+      case 'fairness_info':
+        return 'Manager override checks'
+      default:
+        return 'Schedule review'
+    }
+  }
+
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
+
   useEffect(() => {
     fetchRules()
   }, [])
@@ -37,6 +67,11 @@ export default function RulesPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
+    const confirmed = confirm(
+      'Saving this rule may affect future shift assignments, schedule validation, and manager override decisions. Continue?'
+    )
+    if (!confirmed) return
+
     try {
       const response = await fetch('/api/rules', {
         method: 'POST',
@@ -79,6 +114,11 @@ export default function RulesPage() {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingRule) return
+
+    const confirmed = confirm(
+      'Saving this rule may affect future shift assignments, schedule validation, and manager override decisions. Continue?'
+    )
+    if (!confirmed) return
 
     try {
       const response = await fetch(`/api/rules/${editingRule.id}`, {
@@ -174,6 +214,23 @@ export default function RulesPage() {
                   </span>
                 </div>
                 <p className="text-gray-600 mb-2">{rule.description}</p>
+                <div className="grid gap-2 sm:grid-cols-2 text-sm text-slate-600 mb-2">
+                  <div className="inline-flex items-center gap-2">
+                    <span className="font-semibold">Type:</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
+                      {getRuleType(rule)}
+                    </span>
+                  </div>
+                  <div className="inline-flex items-center gap-2">
+                    <span className="font-semibold">Affects:</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
+                      {getRuleAffects(rule)}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-sm text-slate-500 mb-2">
+                  Updated by Manager · {formatDate(rule.updated_at)}
+                </p>
                 <p className="text-sm text-gray-500">Name: {rule.name}</p>
               </div>
               <div className="flex gap-2">
@@ -262,6 +319,14 @@ export default function RulesPage() {
                   rows={4}
                   placeholder='{}'
                 />
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                <p className="font-semibold mb-2">Impact Preview</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>This rule may affect future shift assignments.</li>
+                  <li>It can change schedule validation results.</li>
+                  <li>It influences manager override decisions.</li>
+                </ul>
               </div>
               <div className="flex items-center">
                 <input
