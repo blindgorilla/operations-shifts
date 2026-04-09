@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import type { SchedulingRule } from '@/types'
 
@@ -16,6 +17,9 @@ export default function RulesPage() {
     is_enabled: true,
     parameters: '{}'
   })
+
+  const activeRuleCount = rules.filter((rule) => rule.is_enabled).length
+  const warningRuleCount = rules.filter((rule) => rule.severity === 'warning').length
 
   const getRuleType = (rule: SchedulingRule) => {
     if (rule.name === 'fairness_info' || rule.name === 'night_rest_preference') return 'Advisory'
@@ -185,36 +189,86 @@ export default function RulesPage() {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Scheduling Rules Management</h1>
-        <button
-          onClick={() => setShowCreateForm(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          Add New Rule
-        </button>
+      <div className="flex flex-col gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <Link
+              href="/manager"
+              className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+            >
+              ← Back to dashboard
+            </Link>
+            <h1 className="text-2xl font-bold mt-3">Scheduling Rules Management</h1>
+          </div>
+          <button
+            onClick={() => setShowCreateForm(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            Add New Rule
+          </button>
+        </div>
+        <p className="max-w-3xl text-sm text-slate-600">
+          Scheduling rules help define how shifts are assigned, validated, and reviewed by managers.
+          Use this page to adjust rule behavior and keep your schedule aligned with operational priorities.
+        </p>
+        <div className="flex flex-wrap gap-3 text-sm">
+          <div className="rounded-full bg-slate-100 px-3 py-2 text-slate-700">
+            {activeRuleCount} active rule{activeRuleCount === 1 ? '' : 's'}
+          </div>
+          <div className="rounded-full bg-amber-100 px-3 py-2 text-amber-800">
+            {warningRuleCount} warning rule{warningRuleCount === 1 ? '' : 's'}
+          </div>
+        </div>
       </div>
 
       <div className="space-y-4">
         {rules.map((rule) => (
           <div key={rule.id} className="border rounded-lg p-4 bg-white shadow">
-            <div className="flex justify-between items-start">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className="text-lg font-semibold">{rule.display_name}</h3>
-                  <span className={`px-2 py-1 text-xs rounded ${
-                    rule.severity === 'error' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {rule.severity}
-                  </span>
-                  <span className={`px-2 py-1 text-xs rounded ${
-                    rule.is_enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {rule.is_enabled ? 'Enabled' : 'Disabled'}
-                  </span>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex flex-wrap items-center gap-3 mb-3">
+                    <h3 className="text-lg font-semibold">{rule.display_name}</h3>
+                    <span className={`px-2 py-1 text-xs rounded ${
+                      rule.severity === 'error' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {rule.severity}
+                    </span>
+                    <span className={`px-2 py-1 text-xs rounded ${
+                      rule.is_enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {rule.is_enabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                  </div>
+                  <p className="text-gray-600 mb-4">{rule.description}</p>
                 </div>
-                <p className="text-gray-600 mb-2">{rule.description}</p>
-                <div className="grid gap-2 sm:grid-cols-2 text-sm text-slate-600 mb-2">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => toggleRule(rule)}
+                    className={`px-3 py-1 text-sm rounded ${
+                      rule.is_enabled
+                        ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                        : 'bg-green-100 text-green-800 hover:bg-green-200'
+                    }`}
+                  >
+                    {rule.is_enabled ? 'Disable' : 'Enable'}
+                  </button>
+                  <button
+                    onClick={() => handleEdit(rule)}
+                    className="px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(rule.id)}
+                    className="px-3 py-1 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 text-sm text-slate-700">
+                <div className="flex flex-col gap-2">
                   <div className="inline-flex items-center gap-2">
                     <span className="font-semibold">Type:</span>
                     <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
@@ -228,34 +282,14 @@ export default function RulesPage() {
                     </span>
                   </div>
                 </div>
-                <p className="text-sm text-slate-500 mb-2">
-                  Updated by Manager · {formatDate(rule.updated_at)}
-                </p>
-                <p className="text-sm text-gray-500">Name: {rule.name}</p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => toggleRule(rule)}
-                  className={`px-3 py-1 text-sm rounded ${
-                    rule.is_enabled
-                      ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                      : 'bg-green-100 text-green-800 hover:bg-green-200'
-                  }`}
-                >
-                  {rule.is_enabled ? 'Disable' : 'Enable'}
-                </button>
-                <button
-                  onClick={() => handleEdit(rule)}
-                  className="px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => handleDelete(rule.id)}
-                  className="px-3 py-1 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
-                >
-                  Delete
-                </button>
+                <div className="flex flex-col gap-2 text-slate-500">
+                  <p>
+                    <span className="font-semibold">Last updated:</span> {formatDate(rule.updated_at)}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Name:</span> {rule.name}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
