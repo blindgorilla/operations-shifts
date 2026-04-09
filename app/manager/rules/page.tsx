@@ -193,7 +193,7 @@ export default function RulesPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <Link
-              href="/manager"
+              href="/dashboard"
               className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-900"
             >
               ← Back to dashboard
