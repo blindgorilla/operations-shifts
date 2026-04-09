@@ -29,6 +29,7 @@ export default function NavBar({ employee }: NavBarProps) {
     { href: '/manager/requests', label: 'Requests' },
     { href: '/manager/employees', label: 'Employees' },
     { href: '/manager/holidays', label: 'Holidays' },
+    { href: '/manager/rules', label: 'Rules' },
   ]
 
   const links = employee.role === 'manager' ? [...employeeLinks, ...managerLinks] : employeeLinks

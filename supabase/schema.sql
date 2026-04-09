@@ -207,6 +207,50 @@ create policy "requests_delete_own" on public.shift_requests
   );
 
 -- ============================================================
+-- SCHEDULING RULES TABLE
+-- ============================================================
+create table if not exists public.scheduling_rules (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null unique,
+  display_name text not null,
+  description text not null,
+  severity text not null check (severity in ('error', 'warning')),
+  is_enabled boolean not null default true,
+  parameters jsonb default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.scheduling_rules enable row level security;
+
+create policy "rules_select_all" on public.scheduling_rules
+  for select using (auth.uid() is not null);
+
+create policy "rules_insert_manager" on public.scheduling_rules
+  for insert with check (
+    exists (
+      select 1 from public.employees e
+      where e.id = auth.uid() and e.role = 'manager'
+    )
+  );
+
+create policy "rules_update_manager" on public.scheduling_rules
+  for update using (
+    exists (
+      select 1 from public.employees e
+      where e.id = auth.uid() and e.role = 'manager'
+    )
+  );
+
+create policy "rules_delete_manager" on public.scheduling_rules
+  for delete using (
+    exists (
+      select 1 from public.employees e
+      where e.id = auth.uid() and e.role = 'manager'
+    )
+  );
+
+-- ============================================================
 -- HELPER VIEWS
 -- ============================================================
 
@@ -251,6 +295,10 @@ create trigger shifts_updated_at
 
 create trigger shift_requests_updated_at
   before update on public.shift_requests
+  for each row execute function public.handle_updated_at();
+
+create trigger scheduling_rules_updated_at
+  before update on public.scheduling_rules
   for each row execute function public.handle_updated_at();
 
 -- ============================================================
