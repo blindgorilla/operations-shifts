@@ -2,16 +2,26 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Employee } from '@/types'
+import NotificationDropdown from '@/components/ui/NotificationDropdown'
+
+
 
 interface NavBarProps {
   employee: Employee
+  pendingCount?: number
 }
 
-export default function NavBar({ employee }: NavBarProps) {
+export default function NavBar({ employee, pendingCount: initialCount = 0 }: NavBarProps) {
   const pathname = usePathname()
   const router = useRouter()
+  const [pendingCount, setPendingCount] = useState(initialCount)
+
+  useEffect(() => {
+    setPendingCount(initialCount)
+  }, [initialCount])
 
   async function handleSignOut() {
     const supabase = createClient()
@@ -19,20 +29,22 @@ export default function NavBar({ employee }: NavBarProps) {
     router.push('/auth/login')
   }
 
-  const employeeLinks = [
+  type NavLink = { href: string; label: string; badge?: number }
+
+  const employeeLinks: NavLink[] = [
     { href: '/dashboard', label: 'Calendar' },
     { href: '/my-requests', label: 'My Requests' },
   ]
 
-  const managerLinks = [
+  const managerLinks: NavLink[] = [
     { href: '/manager/shifts', label: 'Shifts' },
-    { href: '/manager/requests', label: 'Requests' },
+    { href: '/manager/requests', label: 'Requests', badge: pendingCount },
     { href: '/manager/employees', label: 'Employees' },
     { href: '/manager/holidays', label: 'Holidays' },
     { href: '/manager/rules', label: 'Rules' },
   ]
 
-  const links = employee.role === 'manager' ? [...employeeLinks, ...managerLinks] : employeeLinks
+  const links: NavLink[] = employee.role === 'manager' ? [...employeeLinks, ...managerLinks] : employeeLinks
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -52,13 +64,18 @@ export default function NavBar({ employee }: NavBarProps) {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                     pathname === link.href
                       ? 'bg-blue-50 text-blue-700'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                   }`}
                 >
                   {link.label}
+                  {link.badge !== undefined && link.badge > 0 && (
+                    <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+                      {link.badge > 9 ? '9+' : link.badge}
+                    </span>
+                  )}
                 </Link>
               ))}
             </nav>
@@ -66,6 +83,11 @@ export default function NavBar({ employee }: NavBarProps) {
 
           {/* User */}
           <div className="flex items-center gap-3">
+            {/* Bell notification dropdown for managers */}
+            {employee.role === 'manager' && (
+              <NotificationDropdown initialCount={pendingCount} />
+            )}
+
             <div className="text-right hidden sm:block">
               <p className="text-sm font-medium text-gray-900">{employee.name}</p>
               <p className="text-xs text-gray-500 capitalize">{employee.role}</p>

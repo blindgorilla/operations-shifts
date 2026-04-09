@@ -1,7 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import NavBar from '@/components/ui/NavBar'
 import ManagerRequestsClient from '@/components/manager/ManagerRequestsClient'
+
+export const dynamic = 'force-dynamic'
 
 export default async function ManagerRequestsPage() {
   const supabase = await createClient()
@@ -11,14 +14,35 @@ export default async function ManagerRequestsPage() {
   const { data: employee } = await supabase.from('employees').select('*').eq('id', user.id).single()
   if (!employee || employee.role !== 'manager') redirect('/dashboard')
 
-  const { data: requests } = await supabase
+  // Use admin client to bypass RLS — manager role already verified above
+  const admin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
+  // Fetch requests, employees and shifts separately to avoid join issues
+  const { data: rawRequests } = await admin
     .from('shift_requests')
-    .select('*, employee:employees(*), shift:shifts(*)')
+    .select('*')
     .order('created_at', { ascending: false })
+
+  const { data: employees } = await admin.from('employees').select('*')
+  const { data: shifts } = await admin.from('shifts').select('*')
+
+  const employeeMap = Object.fromEntries((employees ?? []).map(e => [e.id, e]))
+  const shiftMap = Object.fromEntries((shifts ?? []).map(s => [s.id, s]))
+
+  const requests = (rawRequests ?? []).map(r => ({
+    ...r,
+    employee: employeeMap[r.employee_id] ?? null,
+    shift: shiftMap[r.shift_id] ?? null,
+  }))
+
+  const pendingCount = (rawRequests ?? []).filter(r => r.status === 'pending').length
 
   return (
     <div className="min-h-screen flex flex-col">
-      <NavBar employee={employee} />
+      <NavBar employee={employee} pendingCount={pendingCount} />
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Shift Requests</h1>

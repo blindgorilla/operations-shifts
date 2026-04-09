@@ -1,8 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import NavBar from '@/components/ui/NavBar'
 import Link from 'next/link'
 import ManagerShiftsClient from '@/components/manager/ManagerShiftsClient'
+
+export const dynamic = 'force-dynamic'
 
 export default async function ManagerShiftsPage() {
   const supabase = await createClient()
@@ -32,9 +35,19 @@ export default async function ManagerShiftsPage() {
     assignment_count: countMap[s.id] ?? 0,
   }))
 
+  // Fetch pending count for badge
+  const admin2 = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+  const { count: pendingCount } = await admin2
+    .from('shift_requests')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'pending')
+
   return (
     <div className="min-h-screen flex flex-col">
-      <NavBar employee={employee} />
+      <NavBar employee={employee} pendingCount={pendingCount ?? 0} />
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
 
         {/* Quick how-to if no shifts yet */}

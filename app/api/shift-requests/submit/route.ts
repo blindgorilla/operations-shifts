@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { validateShiftRequest } from '@/lib/rules/validateShiftRequest'
+import { sendNewRequestEmail } from '@/lib/email/send'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
@@ -92,6 +94,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'You have already requested this shift' }, { status: 409 })
     }
     return NextResponse.json({ error: insertError.message }, { status: 500 })
+  }
+
+  // Notify all managers by email
+  try {
+    const admin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+    const { data: managers } = await admin
+      .from('employees')
+      .select('*')
+      .eq('role', 'manager')
+
+    if (managers && managers.length > 0) {
+      await sendNewRequestEmail(managers, employee, shift)
+    }
+  } catch (emailError) {
+    console.error('Manager notification email failed:', emailError)
   }
 
   return NextResponse.json({ success: true, request: newRequest, violations })
