@@ -188,108 +188,106 @@ export default function RulesPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex flex-col gap-4 mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="p-6 max-w-7xl mx-auto">
+      <div className="flex flex-col gap-5 mb-8 border-b border-slate-200 pb-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <Link
               href="/dashboard"
-              className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900"
             >
               ← Back to dashboard
             </Link>
-            <h1 className="text-2xl font-bold mt-3">Scheduling Rules Management</h1>
+            <h1 className="text-3xl font-semibold mt-3 text-slate-900">Scheduling Rules Management</h1>
           </div>
           <button
             onClick={() => setShowCreateForm(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
           >
             Add New Rule
           </button>
         </div>
-        <p className="max-w-3xl text-sm text-slate-600">
-          Scheduling rules help define how shifts are assigned, validated, and reviewed by managers.
-          Use this page to adjust rule behavior and keep your schedule aligned with operational priorities.
+        <p className="max-w-3xl text-base leading-7 text-slate-600">
+          Scheduling rules help define how shifts are assigned, validated, and reviewed by managers. Adjust rules here to keep the schedule aligned with operational priorities.
         </p>
         <div className="flex flex-wrap gap-3 text-sm">
-          <div className="rounded-full bg-slate-100 px-3 py-2 text-slate-700">
+          <div className="rounded-full bg-slate-100 px-4 py-2 text-slate-700">
             {activeRuleCount} active rule{activeRuleCount === 1 ? '' : 's'}
           </div>
-          <div className="rounded-full bg-amber-100 px-3 py-2 text-amber-800">
+          <div className="rounded-full bg-amber-100 px-4 py-2 text-amber-800">
             {warningRuleCount} warning rule{warningRuleCount === 1 ? '' : 's'}
           </div>
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-5">
         {rules.map((rule) => (
-          <div key={rule.id} className="border rounded-lg p-4 bg-white shadow">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex flex-wrap items-center gap-3 mb-3">
-                    <h3 className="text-lg font-semibold">{rule.display_name}</h3>
-                    <span className={`px-2 py-1 text-xs rounded ${
-                      rule.severity === 'error' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {rule.severity}
-                    </span>
-                    <span className={`px-2 py-1 text-xs rounded ${
-                      rule.is_enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {rule.is_enabled ? 'Enabled' : 'Disabled'}
-                    </span>
-                  </div>
-                  <p className="text-gray-600 mb-4">{rule.description}</p>
+          <div
+            key={rule.id}
+            className="group rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-xl"
+          >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-3 mb-3">
+                  <h3 className="text-xl font-semibold text-slate-900 truncate">{rule.display_name}</h3>
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    rule.severity === 'error'
+                      ? 'bg-red-50 text-red-700 ring-1 ring-red-100'
+                      : 'bg-amber-50 text-amber-800 ring-1 ring-amber-100'
+                  }`}>
+                    {rule.severity === 'error' ? 'Error Rule' : 'Warning Rule'}
+                  </span>
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    rule.is_enabled
+                      ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
+                      : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'
+                  }`}>
+                    {rule.is_enabled ? 'Enabled' : 'Disabled'}
+                  </span>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => toggleRule(rule)}
-                    className={`px-3 py-1 text-sm rounded ${
-                      rule.is_enabled
-                        ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                        : 'bg-green-100 text-green-800 hover:bg-green-200'
-                    }`}
-                  >
-                    {rule.is_enabled ? 'Disable' : 'Enable'}
-                  </button>
-                  <button
-                    onClick={() => handleEdit(rule)}
-                    className="px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(rule.id)}
-                    className="px-3 py-1 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
-                  >
-                    Delete
-                  </button>
-                </div>
+                <p className="text-slate-600 mb-5 leading-7">{rule.description}</p>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2 text-sm text-slate-700">
-                <div className="flex flex-col gap-2">
-                  <div className="inline-flex items-center gap-2">
-                    <span className="font-semibold">Type:</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
-                      {getRuleType(rule)}
-                    </span>
-                  </div>
-                  <div className="inline-flex items-center gap-2">
-                    <span className="font-semibold">Affects:</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
-                      {getRuleAffects(rule)}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 text-slate-500">
-                  <p>
-                    <span className="font-semibold">Last updated:</span> {formatDate(rule.updated_at)}
-                  </p>
-                  <p>
-                    <span className="font-semibold">Name:</span> {rule.name}
-                  </p>
-                </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => handleEdit(rule)}
+                  className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => toggleRule(rule)}
+                  className={`inline-flex items-center justify-center rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                    rule.is_enabled
+                      ? 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                      : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                  }`}
+                >
+                  {rule.is_enabled ? 'Disable' : 'Enable'}
+                </button>
+                <button
+                  onClick={() => handleDelete(rule.id)}
+                  className="inline-flex items-center justify-center rounded-full bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 text-sm text-slate-600">
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-[0.82rem] font-semibold uppercase tracking-[0.15em] text-slate-500">Type</p>
+                <p className="mt-2 text-slate-900">{getRuleType(rule)}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-[0.82rem] font-semibold uppercase tracking-[0.15em] text-slate-500">Affects</p>
+                <p className="mt-2 text-slate-900">{getRuleAffects(rule)}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-[0.82rem] font-semibold uppercase tracking-[0.15em] text-slate-500">Last updated</p>
+                <p className="mt-2 text-slate-900">{formatDate(rule.updated_at)}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-[0.82rem] font-semibold uppercase tracking-[0.15em] text-slate-500">Rule key</p>
+                <p className="mt-2 text-slate-900">{rule.name}</p>
               </div>
             </div>
           </div>
