@@ -49,7 +49,17 @@ export default function ManagerRequestsClient({ requests: initial }: Props) {
     if (!selected) return
     setLoading(true)
 
-    const res = await fetch(`/api/shift-requests/${selected.id}`, {
+    // Resolve the canonical shift_request.id from the requests state.
+    // The top-level id on `selected` may resolve to the shift.id rather than
+    // the shift_request.id in some code paths (calendar view). Looking up by
+    // employee_id + shift_id is safe because the schema enforces UNIQUE on
+    // that pair, so there is always exactly one match.
+    const canonical = requests.find(
+      r => r.employee_id === selected.employee_id && r.shift_id === selected.shift_id
+    )
+    const requestId = canonical?.id ?? selected.id
+
+    const res = await fetch(`/api/shift-requests/${requestId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, manager_note: managerNote }),
@@ -65,7 +75,7 @@ export default function ManagerRequestsClient({ requests: initial }: Props) {
 
     setRequests((prev) =>
       prev.map((r) =>
-        r.id === selected.id ? { ...r, status: data.status, manager_note: managerNote } : r
+        r.id === requestId ? { ...r, status: data.status, manager_note: managerNote } : r
       )
     )
     showToast('success', `Request ${data.status}. Email notification sent.`)
