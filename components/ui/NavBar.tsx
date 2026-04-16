@@ -41,6 +41,7 @@ export default function NavBar({ employee, pendingCount: initialCount = 0 }: Nav
     { href: '/manager/requests', label: 'Requests', badge: pendingCount },
     { href: '/manager/employees', label: 'Employees' },
     { href: '/manager/holidays', label: 'Holidays' },
+    { href: '/manager/rules', label: 'Rules' },
   ]
 
   const links: NavLink[] = employee.role === 'manager' ? [...employeeLinks, ...managerLinks] : employeeLinks
