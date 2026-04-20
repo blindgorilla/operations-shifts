@@ -1,12 +1,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { sendApprovalEmail, sendDenialEmail } from '@/lib/email/send'
+import { validateShiftRequest } from '@/lib/rules/validateShiftRequest'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
 const reviewSchema = z.object({
   action: z.enum(['approve', 'deny']),
   manager_note: z.string().optional(),
+  override: z.boolean().optional(),
 })
 
 export async function PATCH(
@@ -36,7 +38,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
   }
 
-  const { action, manager_note } = parsed.data
+  const { action, manager_note, override } = parsed.data
   const newStatus = action === 'approve' ? 'approved' : 'denied'
 
   // Use admin client to bypass RLS for service operations
@@ -62,6 +64,41 @@ export async function PATCH(
 
   if (shiftRequest.status !== 'pending') {
     return NextResponse.json({ error: 'Request already reviewed' }, { status: 409 })
+  }
+
+  if (action === 'approve') {
+    const { data: existingAssignments } = await admin
+      .from('shift_assignments')
+      .select('*, shift:shifts(*)')
+      .eq('employee_id', shiftRequest.employee_id)
+
+    const { data: allAssignmentsOnShift } = await admin
+      .from('shift_assignments')
+      .select('*, employee:employees(*)')
+      .eq('shift_id', shiftRequest.shift_id)
+
+    const { data: holidays } = await admin
+      .from('public_holidays')
+      .select('date')
+
+    const publicHolidays = (holidays ?? []).map((h: { date: string }) => h.date)
+
+    const violations = validateShiftRequest({
+      employee: enrichedRequest.employee,
+      requestedShift: enrichedRequest.shift,
+      existingAssignments: (existingAssignments ?? []) as any,
+      allAssignmentsOnShift: (allAssignmentsOnShift ?? []) as any,
+      publicHolidays,
+      employeeWeeklyStats: [],
+    })
+
+    const hasErrorViolations = violations.some(v => v.severity === 'error')
+    if (hasErrorViolations && !override) {
+      return NextResponse.json(
+        { error: 'Cannot approve: scheduling rule violation exists. Check the override box to proceed.', violations },
+        { status: 422 }
+      )
+    }
   }
 
   // Update status

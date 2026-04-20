@@ -72,9 +72,7 @@ export async function POST(request: Request) {
     employeeWeeklyStats: [],
   })
 
-  console.log('[RULES DEBUG] violations:', JSON.stringify(violations, null, 2))
   const hasErrors = violations.some((v) => v.severity === 'error')
-  console.log('[RULES DEBUG] hasErrors:', hasErrors)
   if (hasErrors) {
     return NextResponse.json({ error: 'Shift request blocked by scheduling rules', violations }, { status: 422 })
   }
