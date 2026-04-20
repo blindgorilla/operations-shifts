@@ -83,7 +83,7 @@ export async function PATCH(
 
     const publicHolidays = (holidays ?? []).map((h: { date: string }) => h.date)
 
-    const violations = validateShiftRequest({
+    const violations = await validateShiftRequest({
       employee: enrichedRequest.employee,
       requestedShift: enrichedRequest.shift,
       existingAssignments: (existingAssignments ?? []) as any,
