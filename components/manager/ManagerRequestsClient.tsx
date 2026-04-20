@@ -166,8 +166,10 @@ export default function ManagerRequestsClient({ requests: initial }: Props) {
                     )}
 
                     {req.rule_violations && req.rule_violations.length > 0 && (
-                      <div className="mt-2">
-                        <RuleViolationBanner violations={req.rule_violations as RuleViolation[]} />
+                      <div className="mt-2 flex items-center gap-1.5">
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                          ⚠ {req.rule_violations.length} scheduling {req.rule_violations.length === 1 ? 'flag' : 'flags'}
+                        </span>
                       </div>
                     )}
                   </div>

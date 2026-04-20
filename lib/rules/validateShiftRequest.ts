@@ -79,7 +79,7 @@ export function validateShiftRequest(input: ValidationInput): RuleViolation[] {
       violations.push({
         rule: 'min_rest',
         severity: 'error',
-        message: `Less than 12 hours rest between your ${assignment.shift.shift_type} shift on ${format(parseISO(assignment.shift.date), 'dd MMM')} and this shift (${restAfter}h gap).`,
+        message: `You are already working a ${assignment.shift.shift_type} shift on ${format(parseISO(assignment.shift.date), 'dd MMM')}. There is not enough rest time between that shift and this one.`,
       })
     }
 
@@ -87,7 +87,7 @@ export function validateShiftRequest(input: ValidationInput): RuleViolation[] {
       violations.push({
         rule: 'min_rest',
         severity: 'error',
-        message: `Less than 12 hours rest between this shift and your ${assignment.shift.shift_type} shift on ${format(parseISO(assignment.shift.date), 'dd MMM')} (${restBefore}h gap).`,
+        message: `You are already working a ${assignment.shift.shift_type} shift on ${format(parseISO(assignment.shift.date), 'dd MMM')}. There is not enough rest time between this shift and that one.`,
       })
     }
   }
