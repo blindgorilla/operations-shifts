@@ -36,6 +36,7 @@ export default async function ManagerRequestsPage() {
     ...r,
     employee: employeeMap[r.employee_id] ?? null,
     shift: shiftMap[r.shift_id] ?? null,
+    id: r.id,
   }))
 
   const pendingCount = (rawRequests ?? []).filter(r => r.status === 'pending').length

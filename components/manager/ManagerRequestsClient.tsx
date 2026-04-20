@@ -36,6 +36,7 @@ export default function ManagerRequestsClient({ requests: initial }: Props) {
     if (!selected) return
     setLoading(true)
 
+    console.log('[DEBUG] selected:', JSON.stringify({ id: selected.id, shift_id: selected.shift_id, employee_id: selected.employee_id, shift_nested_id: selected.shift?.id }))
     const res = await fetch(`/api/shift-requests/${selected.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
