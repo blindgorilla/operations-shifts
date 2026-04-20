@@ -31,6 +31,7 @@ export default function ManagerRequestsClient({ requests: initial }: Props) {
   const [selected, setSelected] = useState<ShiftRequest | null>(null)
   const [managerNote, setManagerNote] = useState('')
   const [loading, setLoading] = useState(false)
+  const [overrideConfirmed, setOverrideConfirmed] = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [view, setView] = useState<'list' | 'calendar'>('list')
   const [currentMonth, setCurrentMonth] = useState(new Date())
@@ -49,7 +50,7 @@ export default function ManagerRequestsClient({ requests: initial }: Props) {
     const res = await fetch(`/api/shift-requests/${selected.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, manager_note: managerNote }),
+      body: JSON.stringify({ action, manager_note: managerNote, override: overrideConfirmed }),
     })
 
     const data = await res.json()
@@ -71,6 +72,7 @@ export default function ManagerRequestsClient({ requests: initial }: Props) {
   }
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length
+  const hasErrorViolations = (selected?.rule_violations ?? []).some(v => v.severity === 'error')
 
   // Calendar helpers
   const calYear = currentMonth.getFullYear()
@@ -164,15 +166,17 @@ export default function ManagerRequestsClient({ requests: initial }: Props) {
                     )}
 
                     {req.rule_violations && req.rule_violations.length > 0 && (
-                      <div className="mt-2">
-                        <RuleViolationBanner violations={req.rule_violations as RuleViolation[]} />
+                      <div className="mt-2 flex items-center gap-1.5">
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                          ⚠ {req.rule_violations.length} scheduling {req.rule_violations.length === 1 ? 'flag' : 'flags'}
+                        </span>
                       </div>
                     )}
                   </div>
 
                   {req.status === 'pending' && (
                     <button
-                      onClick={() => { setSelected(req); setManagerNote('') }}
+                      onClick={() => { setSelected(req); setManagerNote(''); setOverrideConfirmed(false) }}
                       className="shrink-0 text-sm font-medium bg-blue-600 text-white rounded-lg px-3 py-1.5 hover:bg-blue-700 transition-colors"
                     >
                       Review
@@ -230,7 +234,7 @@ export default function ManagerRequestsClient({ requests: initial }: Props) {
                     {dayRequests.map((req) => (
                       <button
                         key={req.id}
-                        onClick={() => { setSelected(req); setManagerNote('') }}
+                        onClick={() => { setSelected(req); setManagerNote(''); setOverrideConfirmed(false) }}
                         className={`w-full text-left text-xs px-1 py-0.5 rounded truncate ${CHIP_STYLES[req.status]}`}
                       >
                         <span className="font-medium">{req.employee?.name}</span>
@@ -303,10 +307,25 @@ export default function ManagerRequestsClient({ requests: initial }: Props) {
               />
             </div>
 
+            {hasErrorViolations && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm font-medium text-red-700 mb-2">⚠ This request has scheduling rule violations that block approval.</p>
+                <label className="flex items-center gap-2 text-sm text-red-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={overrideConfirmed}
+                    onChange={(e) => setOverrideConfirmed(e.target.checked)}
+                    className="rounded border-red-300"
+                  />
+                  I confirm I am overriding a scheduling rule violation
+                </label>
+              </div>
+            )}
+
             <div className="flex gap-3">
               <button
                 onClick={() => handleReview('approve')}
-                disabled={loading}
+                disabled={loading || (hasErrorViolations && !overrideConfirmed)}
                 className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-2 rounded-lg text-sm transition-colors"
               >
                 {loading ? 'Processing...' : 'Approve'}

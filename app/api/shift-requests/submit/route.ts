@@ -73,9 +73,6 @@ export async function POST(request: Request) {
   })
 
   const hasErrors = violations.some((v) => v.severity === 'error')
-  if (hasErrors) {
-    return NextResponse.json({ error: 'Shift request blocked by scheduling rules', violations }, { status: 422 })
-  }
 
   // Insert request
   const { data: newRequest, error: insertError } = await supabase
