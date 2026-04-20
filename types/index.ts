@@ -49,6 +49,18 @@ export interface RuleViolation {
   message: string
 }
 
+export interface SchedulingRule {
+  id: string
+  name: string
+  display_name: string
+  description: string
+  severity: 'error' | 'warning'
+  is_enabled: boolean
+  parameters: Record<string, any>
+  created_at: string
+  updated_at: string
+}
+
 export interface ShiftRequest {
   id: string
   employee_id: string

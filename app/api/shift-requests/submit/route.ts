@@ -63,7 +63,7 @@ export async function POST(request: Request) {
   const publicHolidays = (holidays ?? []).map((h: { date: string }) => h.date)
 
   // Run rules engine
-  const violations = validateShiftRequest({
+  const violations = await validateShiftRequest({
     employee,
     requestedShift: shift,
     existingAssignments: (existingAssignments ?? []) as any,
