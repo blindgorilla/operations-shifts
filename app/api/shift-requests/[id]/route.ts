@@ -48,13 +48,17 @@ export async function PATCH(
   // Fetch the request with employee + shift
   const { data: shiftRequest, error: fetchError } = await admin
     .from('shift_requests')
-    .select('*, employee:employees(*), shift:shifts(*)')
+    .select('*')
     .eq('id', id)
     .single()
 
   if (fetchError || !shiftRequest) {
     return NextResponse.json({ error: 'Request not found' }, { status: 404 })
   }
+
+  const { data: employee } = await admin.from('employees').select('*').eq('id', shiftRequest.employee_id).single()
+  const { data: shift } = await admin.from('shifts').select('*').eq('id', shiftRequest.shift_id).single()
+  const enrichedRequest = { ...shiftRequest, employee, shift }
 
   if (shiftRequest.status !== 'pending') {
     return NextResponse.json({ error: 'Request already reviewed' }, { status: 409 })
@@ -87,9 +91,9 @@ export async function PATCH(
   // Send email notification
   try {
     if (action === 'approve') {
-      await sendApprovalEmail(shiftRequest.employee, shiftRequest.shift, manager_note)
+      await sendApprovalEmail(enrichedRequest.employee, enrichedRequest.shift, manager_note)
     } else {
-      await sendDenialEmail(shiftRequest.employee, shiftRequest.shift, manager_note)
+      await sendDenialEmail(enrichedRequest.employee, enrichedRequest.shift, manager_note)
     }
   } catch (emailError) {
     // Don't fail the whole request if email fails
