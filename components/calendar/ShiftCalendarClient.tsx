@@ -66,6 +66,8 @@ export default function ShiftCalendarClient({
   const [requestedIds, setRequestedIds] = useState(new Set(requestedShiftIds))
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [violations, setViolations] = useState<RuleViolation[]>([])
+  const [pendingViolations, setPendingViolations] = useState<RuleViolation[] | null>(null)
+  const [pendingShiftId, setPendingShiftId] = useState<string | null>(null)
 
   const events = shifts.map(shiftToEvent)
 
@@ -84,13 +86,21 @@ export default function ShiftCalendarClient({
     const data = await res.json()
 
     if (!res.ok) {
-      if (data.violations) setViolations(data.violations)
       showToast('error', data.error ?? 'Failed to submit request')
       return
     }
 
+    const responseViolations: RuleViolation[] = data.violations ?? []
+    const hasErrorViolations = responseViolations.some((v) => v.severity === 'error')
+
+    if (hasErrorViolations) {
+      setPendingViolations(responseViolations)
+      setPendingShiftId(shiftId)
+      return
+    }
+
     setRequestedIds((prev) => new Set([...prev, shiftId]))
-    setViolations(data.violations ?? [])
+    setViolations(responseViolations)
     showToast('success', 'Shift request submitted successfully')
     setSelectedShift(null)
   }, [])
@@ -173,6 +183,41 @@ export default function ShiftCalendarClient({
               onRequest={handleRequest}
             />
           ))}
+        </div>
+      )}
+
+      {/* Violation confirmation modal */}
+      {pendingViolations && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => { setPendingViolations(null); setPendingShiftId(null) }}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold mb-3">Scheduling Violations Detected</h2>
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg space-y-1">
+              {pendingViolations.map((v, i) => (
+                <p key={i} className="text-sm text-red-700">{v.message}</p>
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setPendingViolations(null); setPendingShiftId(null) }}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (pendingShiftId) setRequestedIds((prev) => new Set([...prev, pendingShiftId]))
+                  setViolations(pendingViolations)
+                  showToast('success', 'Shift request submitted successfully')
+                  setPendingViolations(null)
+                  setPendingShiftId(null)
+                  setSelectedShift(null)
+                }}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 rounded-lg text-sm transition-colors"
+              >
+                Request Anyway
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
