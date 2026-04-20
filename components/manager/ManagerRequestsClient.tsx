@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, addMonths, subMonths, startOfMonth, getDaysInMonth, getDay } from 'date-fns'
 import type { ShiftRequest, RuleViolation } from '@/types'
 import RuleViolationBanner from '@/components/ui/RuleViolationBanner'
 
@@ -15,7 +15,15 @@ const STATUS_STYLES: Record<string, string> = {
   denied: 'bg-red-100 text-red-700',
 }
 
+const CHIP_STYLES: Record<string, string> = {
+  pending: 'bg-amber-200 text-amber-900',
+  approved: 'bg-green-200 text-green-900',
+  denied: 'bg-red-200 text-red-900',
+}
+
 const FILTER_OPTIONS = ['all', 'pending', 'approved', 'denied'] as const
+
+const DAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 export default function ManagerRequestsClient({ requests: initial }: Props) {
   const [requests, setRequests] = useState(initial)
@@ -24,6 +32,8 @@ export default function ManagerRequestsClient({ requests: initial }: Props) {
   const [managerNote, setManagerNote] = useState('')
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [view, setView] = useState<'list' | 'calendar'>('list')
+  const [currentMonth, setCurrentMonth] = useState(new Date())
 
   const filtered = filter === 'all' ? requests : requests.filter((r) => r.status === filter)
 
@@ -63,6 +73,24 @@ export default function ManagerRequestsClient({ requests: initial }: Props) {
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length
 
+  // Calendar helpers
+  const calYear = currentMonth.getFullYear()
+  const calMonth = currentMonth.getMonth()
+  const monthStart = startOfMonth(currentMonth)
+  const daysInMonth = getDaysInMonth(currentMonth)
+  const startOffset = (getDay(monthStart) + 6) % 7
+  const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+
+  const requestsByDate: Record<string, ShiftRequest[]> = {}
+  filtered.forEach((req) => {
+    if (req.shift?.date) {
+      const key = req.shift.date.slice(0, 10)
+      if (!requestsByDate[key]) requestsByDate[key] = []
+      requestsByDate[key].push(req)
+    }
+  })
+
   return (
     <div>
       {toast && (
@@ -70,6 +98,16 @@ export default function ManagerRequestsClient({ requests: initial }: Props) {
           {toast.message}
         </div>
       )}
+
+      {/* View toggle */}
+      <div className="flex items-center gap-2 mb-3">
+        {['list', 'calendar'].map((v) => (
+          <button key={v} onClick={() => setView(v as 'list' | 'calendar')}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize transition-colors ${view === v ? 'bg-gray-900 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+            {v === 'list' ? 'List' : 'Calendar'}
+          </button>
+        ))}
+      </div>
 
       {/* Filters */}
       <div className="flex items-center gap-2 mb-4">
@@ -86,63 +124,140 @@ export default function ManagerRequestsClient({ requests: initial }: Props) {
         ))}
       </div>
 
-      {filtered.length === 0 && (
-        <div className="text-center py-16 text-gray-400">
-          <p className="text-sm">No {filter === 'all' ? '' : filter} requests</p>
-        </div>
-      )}
+      {view === 'list' && (
+        <>
+          {filtered.length === 0 && (
+            <div className="text-center py-16 text-gray-400">
+              <p className="text-sm">No {filter === 'all' ? '' : filter} requests</p>
+            </div>
+          )}
 
-      <div className="space-y-3">
-        {filtered.map((req) => (
-          <div key={req.id} className="bg-white border border-gray-200 rounded-xl p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className="font-semibold">{req.employee?.name}</span>
-                  <span className="text-gray-400 text-sm">·</span>
-                  <span className="capitalize text-gray-700 text-sm">{req.shift?.shift_type} shift</span>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${STATUS_STYLES[req.status]}`}>
-                    {req.status}
-                  </span>
-                  {req.employee?.is_new_employee && (
-                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">New Employee</span>
+          <div className="space-y-3">
+            {filtered.map((req) => (
+              <div key={req.id} className="bg-white border border-gray-200 rounded-xl p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="font-semibold">{req.employee?.name}</span>
+                      <span className="text-gray-400 text-sm">·</span>
+                      <span className="capitalize text-gray-700 text-sm">{req.shift?.shift_type} shift</span>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${STATUS_STYLES[req.status]}`}>
+                        {req.status}
+                      </span>
+                      {req.employee?.is_new_employee && (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">New Employee</span>
+                      )}
+                    </div>
+
+                    {req.shift && (
+                      <p className="text-sm text-gray-600">
+                        {format(parseISO(req.shift.date), 'EEEE, d MMMM yyyy')} · {req.shift.start_time.slice(0, 5)}–{req.shift.end_time.slice(0, 5)}
+                        {req.shift.location && ` · ${req.shift.location}`}
+                      </p>
+                    )}
+
+                    {req.employee_note && (
+                      <p className="text-xs text-gray-500 mt-1">Employee note: {req.employee_note}</p>
+                    )}
+
+                    {req.manager_note && (
+                      <p className="text-xs text-gray-500 mt-1 italic">Your note: {req.manager_note}</p>
+                    )}
+
+                    {req.rule_violations && req.rule_violations.length > 0 && (
+                      <div className="mt-2">
+                        <RuleViolationBanner violations={req.rule_violations as RuleViolation[]} />
+                      </div>
+                    )}
+                  </div>
+
+                  {req.status === 'pending' && (
+                    <button
+                      onClick={() => { setSelected(req); setManagerNote('') }}
+                      className="shrink-0 text-sm font-medium bg-blue-600 text-white rounded-lg px-3 py-1.5 hover:bg-blue-700 transition-colors"
+                    >
+                      Review
+                    </button>
                   )}
                 </div>
-
-                {req.shift && (
-                  <p className="text-sm text-gray-600">
-                    {format(parseISO(req.shift.date), 'EEEE, d MMMM yyyy')} · {req.shift.start_time.slice(0, 5)}–{req.shift.end_time.slice(0, 5)}
-                    {req.shift.location && ` · ${req.shift.location}`}
-                  </p>
-                )}
-
-                {req.employee_note && (
-                  <p className="text-xs text-gray-500 mt-1">Employee note: {req.employee_note}</p>
-                )}
-
-                {req.manager_note && (
-                  <p className="text-xs text-gray-500 mt-1 italic">Your note: {req.manager_note}</p>
-                )}
-
-                {req.rule_violations && req.rule_violations.length > 0 && (
-                  <div className="mt-2">
-                    <RuleViolationBanner violations={req.rule_violations as RuleViolation[]} />
-                  </div>
-                )}
               </div>
-
-              {req.status === 'pending' && (
-                <button
-                  onClick={() => { setSelected(req); setManagerNote('') }}
-                  className="shrink-0 text-sm font-medium bg-blue-600 text-white rounded-lg px-3 py-1.5 hover:bg-blue-700 transition-colors"
-                >
-                  Review
-                </button>
-              )}
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
+
+      {view === 'calendar' && (
+        <div>
+          {/* Month navigation */}
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              ← Prev
+            </button>
+            <h2 className="font-semibold text-gray-900">{format(currentMonth, 'MMMM yyyy')}</h2>
+            <button
+              onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              Next →
+            </button>
+          </div>
+
+          {/* Day headers */}
+          <div className="grid grid-cols-7 mb-1">
+            {DAY_HEADERS.map((d) => (
+              <div key={d} className="text-center text-xs font-medium text-gray-500 py-1">{d}</div>
+            ))}
+          </div>
+
+          {/* Day cells */}
+          <div className="grid grid-cols-7 gap-px bg-gray-200 border border-gray-200 rounded-lg overflow-hidden">
+            {Array.from({ length: totalCells }).map((_, i) => {
+              const dayNum = i - startOffset + 1
+              if (dayNum < 1 || dayNum > daysInMonth) {
+                return <div key={i} className="bg-gray-50 min-h-[80px]" />
+              }
+              const dateKey = format(new Date(calYear, calMonth, dayNum), 'yyyy-MM-dd')
+              const dayRequests = requestsByDate[dateKey] ?? []
+              const isToday = dateKey === todayStr
+              return (
+                <div key={i} className={`bg-white min-h-[80px] p-1 ${isToday ? 'ring-1 ring-inset ring-blue-400' : ''}`}>
+                  <div className={`text-xs font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white' : 'text-gray-500'}`}>
+                    {dayNum}
+                  </div>
+                  <div className="space-y-0.5">
+                    {dayRequests.map((req) => (
+                      <button
+                        key={req.id}
+                        onClick={() => { setSelected(req); setManagerNote('') }}
+                        className={`w-full text-left text-xs px-1 py-0.5 rounded truncate ${CHIP_STYLES[req.status]}`}
+                      >
+                        <span className="font-medium">{req.employee?.name}</span>
+                        {req.shift?.shift_type && <span className="opacity-75"> · {req.shift.shift_type}</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center gap-4 mt-3 text-xs text-gray-600">
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded bg-amber-200 inline-block" /> Pending
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded bg-green-200 inline-block" /> Approved
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded bg-red-200 inline-block" /> Denied
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Review modal */}
       {selected && (
