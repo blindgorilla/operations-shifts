@@ -72,6 +72,8 @@ export async function POST(request: Request) {
     employeeWeeklyStats: [],
   })
 
+  console.log('[HEADCOUNT DEBUG] shift headcount:', shift.headcount, 'allAssignmentsOnShift count:', (shiftAssignments ?? []).length, 'violations:', JSON.stringify(violations))
+
   const hasErrors = violations.some((v) => v.severity === 'error')
 
   // Insert request
