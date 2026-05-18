@@ -49,8 +49,13 @@ export async function POST(request: Request) {
     .select('*, shift:shifts(*)')
     .eq('employee_id', user.id)
 
+  const admin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
   // Fetch all assignments on the requested shift (to check headcount + new employee rule)
-  const { data: shiftAssignments } = await supabase
+  const { data: shiftAssignments } = await admin
     .from('shift_assignments')
     .select('*, employee:employees(*)')
     .eq('shift_id', shift_id)
