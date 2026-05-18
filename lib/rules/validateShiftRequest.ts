@@ -36,8 +36,8 @@ function getShiftEndDatetime(shift: Shift): Date {
   const [h, m] = shift.end_time.split(':').map(Number)
   const d = parseISO(shift.date)
   d.setHours(h, m, 0, 0)
-  // Night shifts end the next day
-  if (shift.shift_type === 'night' && h < 12) {
+  const [startH] = shift.start_time.split(':').map(Number)
+  if (h < startH) {
     d.setDate(d.getDate() + 1)
   }
   return d
