@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -31,6 +31,13 @@ export default function LoginPage() {
       }
       router.push('/dashboard')
       router.refresh()
+    } else if (mode === 'forgot') {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password`,
+      })
+      if (error) { setError(error.message); setLoading(false); return }
+      setSuccess('Password reset email sent. Check your inbox.')
+      setLoading(false)
     } else {
       const { error } = await supabase.auth.signUp({
         email,
@@ -51,7 +58,7 @@ export default function LoginPage() {
     }
   }
 
-  function switchMode(newMode: 'signin' | 'signup') {
+  function switchMode(newMode: 'signin' | 'signup' | 'forgot') {
     setMode(newMode)
     setError(null)
     setSuccess(null)
@@ -73,30 +80,36 @@ export default function LoginPage() {
           </div>
 
           {/* Tab switcher */}
-          <div className="flex rounded-lg border border-gray-200 p-1 mb-6">
-            <button
-              type="button"
-              onClick={() => switchMode('signin')}
-              className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                mode === 'signin'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Sign in
-            </button>
-            <button
-              type="button"
-              onClick={() => switchMode('signup')}
-              className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                mode === 'signup'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Create account
-            </button>
-          </div>
+          {mode === 'forgot' ? (
+            <div className="mb-6">
+              <button type="button" onClick={() => switchMode('signin')} className="text-sm text-gray-500 hover:text-gray-700">← Back to sign in</button>
+            </div>
+          ) : (
+            <div className="flex rounded-lg border border-gray-200 p-1 mb-6">
+              <button
+                type="button"
+                onClick={() => switchMode('signin')}
+                className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  mode === 'signin'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Sign in
+              </button>
+              <button
+                type="button"
+                onClick={() => switchMode('signup')}
+                className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  mode === 'signup'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Create account
+              </button>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
 
@@ -133,21 +146,31 @@ export default function LoginPage() {
               />
             </div>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                Password {mode === 'signup' && <span className="text-gray-400 font-normal">(min. 6 characters)</span>}
-              </label>
-              <input
-                id="password"
-                type="password"
-                required
-                minLength={mode === 'signup' ? 6 : undefined}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="••••••••"
-              />
-            </div>
+            {mode !== 'forgot' && (
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                  Password {mode === 'signup' && <span className="text-gray-400 font-normal">(min. 6 characters)</span>}
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  required
+                  minLength={mode === 'signup' ? 6 : undefined}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="········"
+                />
+              </div>
+            )}
+
+            {mode === 'signin' && (
+              <div className="text-right">
+                <button type="button" onClick={() => switchMode('forgot')} className="text-xs text-blue-600 hover:underline">
+                  Forgot password?
+                </button>
+              </div>
+            )}
 
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">
@@ -167,8 +190,8 @@ export default function LoginPage() {
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-4 rounded-lg text-sm transition-colors"
             >
               {loading
-                ? mode === 'signin' ? 'Signing in...' : 'Creating account...'
-                : mode === 'signin' ? 'Sign in' : 'Create account'}
+                ? mode === 'signin' ? 'Signing in...' : mode === 'forgot' ? 'Sending...' : 'Creating account...'
+                : mode === 'signin' ? 'Sign in' : mode === 'forgot' ? 'Send reset email' : 'Create account'}
             </button>
           </form>
         </div>
