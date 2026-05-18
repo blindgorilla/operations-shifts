@@ -57,14 +57,19 @@ export async function POST(request: Request) {
   // Fetch all assignments on the requested shift (to check headcount + new employee rule)
   const { data: shiftAssignments } = await admin
     .from('shift_assignments')
-    .select('*, employee:employees(*)')
-    .eq('shift_id', shift_id)
-
-  const { data: debugAssignments, error: debugError } = await admin
-    .from('shift_assignments')
     .select('*')
     .eq('shift_id', shift_id)
-  console.log('[ADMIN DEBUG] shift_id:', shift_id, 'assignments:', JSON.stringify(debugAssignments), 'error:', JSON.stringify(debugError), 'env check:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
+
+  // Fetch employee details separately for new_employee_pairing rule
+  const assignmentEmployeeIds = (shiftAssignments ?? []).map((a: any) => a.employee_id)
+  const { data: assignmentEmployees } = assignmentEmployeeIds.length > 0
+    ? await admin.from('employees').select('*').in('id', assignmentEmployeeIds)
+    : { data: [] }
+
+  const enrichedShiftAssignments = (shiftAssignments ?? []).map((a: any) => ({
+    ...a,
+    employee: (assignmentEmployees ?? []).find((e: any) => e.id === a.employee_id) ?? null,
+  }))
 
   // Fetch public holidays
   const { data: holidays } = await supabase
@@ -78,7 +83,7 @@ export async function POST(request: Request) {
     employee,
     requestedShift: shift,
     existingAssignments: (existingAssignments ?? []) as any,
-    allAssignmentsOnShift: (shiftAssignments ?? []) as any,
+    allAssignmentsOnShift: (enrichedShiftAssignments ?? []) as any,
     publicHolidays,
     employeeWeeklyStats: [],
   })
