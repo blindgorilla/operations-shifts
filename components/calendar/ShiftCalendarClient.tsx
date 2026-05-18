@@ -46,7 +46,7 @@ function shiftToEvent(shift: Shift, isManager: boolean): CalEvent {
   start.setHours(sh, sm)
   const end = parseISO(shift.date)
   end.setHours(eh, em)
-  if (shift.shift_type === 'night' && eh < 12) end.setDate(end.getDate() + 1)
+  if (eh < sh || (eh === sh && em < sm)) end.setDate(end.getDate() + 1)
   const title = isManager
     ? `${shift.shift_type} · ${assignmentCount}/${headcount}`
     : `${shift.shift_type.charAt(0).toUpperCase() + shift.shift_type.slice(1)} ${shift.start_time.slice(0, 5)}`

@@ -6,9 +6,9 @@ import { createClient } from '@/lib/supabase/client'
 import type { ShiftType } from '@/types'
 
 const SHIFT_DEFAULTS: Record<ShiftType, { start: string; end: string }> = {
-  morning: { start: '06:00', end: '14:00' },
-  evening: { start: '14:00', end: '22:00' },
-  night: { start: '22:00', end: '06:00' },
+  morning: { start: '09:00', end: '17:00' },
+  evening: { start: '17:00', end: '01:00' },
+  night: { start: '01:00', end: '09:00' },
 }
 
 export default function NewShiftForm() {
@@ -19,8 +19,8 @@ export default function NewShiftForm() {
   const [form, setForm] = useState({
     date: '',
     shift_type: 'morning' as ShiftType,
-    start_time: '06:00',
-    end_time: '14:00',
+    start_time: '09:00',
+    end_time: '17:00',
     location: '',
     role_required: '',
     headcount: 1,
