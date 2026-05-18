@@ -21,15 +21,20 @@ export default async function DashboardPage() {
 
   if (!employee) redirect('/auth/login')
 
-  // Fetch upcoming published shifts
+  // Fetch upcoming shifts — managers see all, employees see only published
   const today = new Date().toISOString().split('T')[0]
-  const { data: shifts } = await supabase
+  let shiftsQuery = supabase
     .from('shifts')
     .select('*')
-    .eq('is_published', true)
     .gte('date', today)
     .order('date', { ascending: true })
     .order('start_time', { ascending: true })
+
+  if (employee.role !== 'manager') {
+    shiftsQuery = shiftsQuery.eq('is_published', true)
+  }
+
+  const { data: shifts } = await shiftsQuery
 
   // Fetch employee's own requests
   const { data: myRequests } = await supabase
