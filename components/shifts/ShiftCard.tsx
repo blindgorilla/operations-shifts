@@ -10,6 +10,7 @@ interface ShiftCardProps {
   violations?: RuleViolation[]
   hasRequested?: boolean
   isAssigned?: boolean
+  isFull?: boolean
   onRequest: (shiftId: string, note: string) => Promise<void>
 }
 
@@ -25,7 +26,7 @@ const SHIFT_ICONS: Record<string, string> = {
   night: '🌙',
 }
 
-export default function ShiftCard({ shift, violations = [], hasRequested, isAssigned, onRequest }: ShiftCardProps) {
+export default function ShiftCard({ shift, violations = [], hasRequested, isAssigned, isFull, onRequest }: ShiftCardProps) {
   const [note, setNote] = useState('')
   const [expanded, setExpanded] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -41,8 +42,10 @@ export default function ShiftCard({ shift, violations = [], hasRequested, isAssi
     setNote('')
   }
 
+  const showFullBadge = isFull && !isAssigned
+
   return (
-    <div className={`border rounded-xl p-4 ${colorClass}`}>
+    <div className={`border rounded-xl p-4 ${colorClass}${showFullBadge ? ' opacity-50' : ''}`}>
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -68,14 +71,16 @@ export default function ShiftCard({ shift, violations = [], hasRequested, isAssi
           {shift.notes && <p className="text-xs mt-1 italic opacity-70">{shift.notes}</p>}
         </div>
 
-        {!isAssigned && !hasRequested && !hasErrors && (
+        {showFullBadge ? (
+          <span className="text-xs font-medium px-2 py-1 rounded-full bg-gray-200 text-gray-500">Full</span>
+        ) : (!isAssigned && !hasRequested && !hasErrors && (
           <button
             onClick={() => setExpanded(!expanded)}
             className="shrink-0 text-sm font-medium bg-white border border-current rounded-lg px-3 py-1.5 hover:bg-white/80 transition-colors"
           >
             Request
           </button>
-        )}
+        ))}
       </div>
 
       {violations.length > 0 && (
@@ -84,7 +89,7 @@ export default function ShiftCard({ shift, violations = [], hasRequested, isAssi
         </div>
       )}
 
-      {expanded && (
+      {expanded && !showFullBadge && (
         <div className="mt-3 space-y-2 border-t border-current/10 pt-3">
           <textarea
             value={note}

@@ -47,9 +47,11 @@ function shiftToEvent(shift: Shift, isManager: boolean): CalEvent {
   const end = parseISO(shift.date)
   end.setHours(eh, em)
   if (eh < sh || (eh === sh && em < sm)) end.setDate(end.getDate() + 1)
-  const title = isManager
+  const isFull = assignmentCount >= headcount
+  const baseTitle = isManager
     ? `${shift.shift_type} · ${assignmentCount}/${headcount}`
     : `${shift.shift_type.charAt(0).toUpperCase() + shift.shift_type.slice(1)} ${shift.start_time.slice(0, 5)}`
+  const title = (!isManager && isFull) ? `${baseTitle} · Full` : baseTitle
   return { id: shift.id, title, start, end, resource: shift }
 }
 
@@ -118,7 +120,11 @@ export default function ShiftCalendarClient({
     const color = SHIFT_COLORS[event.resource.shift_type] ?? '#6b7280'
     const isAssigned = assignedShiftIds.includes(event.id)
     const isRequested = requestedIds.has(event.id)
-    return { style: { backgroundColor: isAssigned ? '#16a34a' : isRequested ? '#7c3aed' : color, borderRadius: '6px', border: 'none', color: '#fff', fontSize: '12px' } }
+    const assignmentCount = (event.resource as any).assignment_count ?? 0
+    const headcount = (event.resource as any).headcount ?? 1
+    const isFull = assignmentCount >= headcount
+    const bgColor = isAssigned ? '#16a34a' : isRequested ? '#7c3aed' : (isFull ? '#9ca3af' : color)
+    return { style: { backgroundColor: bgColor, borderRadius: '6px', border: 'none', color: '#fff', fontSize: '12px' } }
   }, [employee.role, assignedShiftIds, requestedIds])
 
   return (
@@ -191,6 +197,7 @@ export default function ShiftCalendarClient({
               violations={selectedShift?.id === shift.id ? violations : []}
               hasRequested={requestedIds.has(shift.id)}
               isAssigned={assignedShiftIds.includes(shift.id)}
+              isFull={((shift as any).assignment_count ?? 0) >= ((shift as any).headcount ?? 1)}
               onRequest={handleRequest}
             />
           ))}
@@ -265,6 +272,7 @@ export default function ShiftCalendarClient({
               violations={violations}
               hasRequested={requestedIds.has(selectedShift.id)}
               isAssigned={assignedShiftIds.includes(selectedShift.id)}
+              isFull={((selectedShift as any).assignment_count ?? 0) >= ((selectedShift as any).headcount ?? 1)}
               onRequest={handleRequest}
             />
           </div>
