@@ -88,7 +88,16 @@ export async function POST(request: Request) {
     employeeWeeklyStats: [],
   })
 
-  const hasErrors = violations.some((v) => v.severity === 'error')
+  const headcountViolations = violations.filter(v => v.rule === 'headcount')
+  const otherViolations = violations.filter(v => v.rule !== 'headcount')
+
+  if (headcountViolations.length > 0) {
+    return NextResponse.json({
+      error: 'shift_full',
+      message: 'All spots for this shift have been filled.',
+      violations: headcountViolations,
+    }, { status: 422 })
+  }
 
   // Insert request
   const { data: newRequest, error: insertError } = await supabase
@@ -97,7 +106,7 @@ export async function POST(request: Request) {
       employee_id: user.id,
       shift_id,
       employee_note: employee_note ?? null,
-      rule_violations: violations,
+      rule_violations: otherViolations,
     })
     .select()
     .single()
@@ -127,5 +136,5 @@ export async function POST(request: Request) {
     console.error('Manager notification email failed:', emailError)
   }
 
-  return NextResponse.json({ success: true, request: newRequest, violations })
+  return NextResponse.json({ success: true, request: newRequest, violations: otherViolations })
 }

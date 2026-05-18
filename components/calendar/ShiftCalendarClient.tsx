@@ -66,6 +66,7 @@ export default function ShiftCalendarClient({
   const [violations, setViolations] = useState<RuleViolation[]>([])
   const [pendingViolations, setPendingViolations] = useState<RuleViolation[] | null>(null)
   const [pendingShiftId, setPendingShiftId] = useState<string | null>(null)
+  const [shiftFullMessage, setShiftFullMessage] = useState<boolean>(false)
 
   const events = shifts.map(s => shiftToEvent(s, employee.role === 'manager'))
 
@@ -84,7 +85,11 @@ export default function ShiftCalendarClient({
     const data = await res.json()
 
     if (!res.ok) {
-      showToast('error', data.error ?? 'Failed to submit request')
+      if (res.status === 422 && data.error === 'shift_full') {
+        setShiftFullMessage(true)
+      } else {
+        showToast('error', data.error ?? 'Failed to submit request')
+      }
       return
     }
 
@@ -192,11 +197,27 @@ export default function ShiftCalendarClient({
         </div>
       )}
 
+      {/* Shift full modal */}
+      {shiftFullMessage && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <h2 className="text-lg font-semibold mb-3">This shift is full</h2>
+            <p className="text-sm text-gray-600 mb-6">All spots for this shift have been filled. Check back later or speak to your manager.</p>
+            <button
+              onClick={() => setShiftFullMessage(false)}
+              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Violation confirmation modal */}
       {pendingViolations && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => { setPendingViolations(null); setPendingShiftId(null) }}>
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold mb-3">Scheduling Violations Detected</h2>
+            <h2 className="text-lg font-semibold mb-3">Heads up — scheduling notice</h2>
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg space-y-1">
               {pendingViolations.map((v, i) => (
                 <p key={i} className="text-sm text-red-700">{v.message}</p>
