@@ -37,7 +37,9 @@ interface CalEvent {
   resource: Shift
 }
 
-function shiftToEvent(shift: Shift): CalEvent {
+function shiftToEvent(shift: Shift, isManager: boolean): CalEvent {
+  const assignmentCount = (shift as any).assignment_count ?? 0
+  const headcount = (shift as any).headcount ?? 1
   const [sh, sm] = shift.start_time.split(':').map(Number)
   const [eh, em] = shift.end_time.split(':').map(Number)
   const start = parseISO(shift.date)
@@ -45,14 +47,10 @@ function shiftToEvent(shift: Shift): CalEvent {
   const end = parseISO(shift.date)
   end.setHours(eh, em)
   if (shift.shift_type === 'night' && eh < 12) end.setDate(end.getDate() + 1)
-
-  return {
-    id: shift.id,
-    title: `${shift.shift_type.charAt(0).toUpperCase() + shift.shift_type.slice(1)} ${shift.start_time.slice(0, 5)}`,
-    start,
-    end,
-    resource: shift,
-  }
+  const title = isManager
+    ? `${shift.shift_type} · ${assignmentCount}/${headcount}`
+    : `${shift.shift_type.charAt(0).toUpperCase() + shift.shift_type.slice(1)} ${shift.start_time.slice(0, 5)}`
+  return { id: shift.id, title, start, end, resource: shift }
 }
 
 export default function ShiftCalendarClient({
@@ -69,7 +67,7 @@ export default function ShiftCalendarClient({
   const [pendingViolations, setPendingViolations] = useState<RuleViolation[] | null>(null)
   const [pendingShiftId, setPendingShiftId] = useState<string | null>(null)
 
-  const events = shifts.map(shiftToEvent)
+  const events = shifts.map(s => shiftToEvent(s, employee.role === 'manager'))
 
   const showToast = (type: 'success' | 'error', message: string) => {
     setToast({ type, message })
@@ -106,19 +104,17 @@ export default function ShiftCalendarClient({
   }, [])
 
   const eventStyleGetter = useCallback((event: CalEvent) => {
+    if (employee.role === 'manager') {
+      const count = (event.resource as any).assignment_count ?? 0
+      const total = (event.resource as any).headcount ?? 1
+      const color = count === 0 ? '#ef4444' : count < total ? '#f59e0b' : '#16a34a'
+      return { style: { backgroundColor: color, borderRadius: '6px', border: 'none', color: '#fff', fontSize: '12px' } }
+    }
     const color = SHIFT_COLORS[event.resource.shift_type] ?? '#6b7280'
     const isAssigned = assignedShiftIds.includes(event.id)
     const isRequested = requestedIds.has(event.id)
-    return {
-      style: {
-        backgroundColor: isAssigned ? '#16a34a' : isRequested ? '#7c3aed' : color,
-        borderRadius: '6px',
-        border: 'none',
-        color: '#fff',
-        fontSize: '12px',
-      },
-    }
-  }, [assignedShiftIds, requestedIds])
+    return { style: { backgroundColor: isAssigned ? '#16a34a' : isRequested ? '#7c3aed' : color, borderRadius: '6px', border: 'none', color: '#fff', fontSize: '12px' } }
+  }, [employee.role, assignedShiftIds, requestedIds])
 
   return (
     <div>
@@ -145,10 +141,20 @@ export default function ShiftCalendarClient({
         </button>
 
         <div className="ml-4 flex items-center gap-3 text-xs text-gray-500">
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" /> Morning</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" /> Evening</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block" /> Night</span>
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-600 inline-block" /> Assigned</span>
+          {employee.role === 'manager' ? (
+            <>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> Empty</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" /> Partial</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-600 inline-block" /> Fully staffed</span>
+            </>
+          ) : (
+            <>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" /> Morning</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" /> Evening</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block" /> Night</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-600 inline-block" /> Assigned</span>
+            </>
+          )}
         </div>
       </div>
 
