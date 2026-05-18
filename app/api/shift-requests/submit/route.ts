@@ -77,6 +77,8 @@ export async function POST(request: Request) {
     employeeWeeklyStats: [],
   })
 
+  console.log('[RULES DEBUG] shift_id:', shift_id, 'headcount:', shift.headcount, 'assignmentsOnShift:', (shiftAssignments ?? []).length, 'violations:', JSON.stringify(violations))
+
   const hasErrors = violations.some((v) => v.severity === 'error')
 
   // Insert request
