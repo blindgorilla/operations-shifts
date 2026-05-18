@@ -60,6 +60,12 @@ export async function POST(request: Request) {
     .select('*, employee:employees(*)')
     .eq('shift_id', shift_id)
 
+  const { data: debugAssignments, error: debugError } = await admin
+    .from('shift_assignments')
+    .select('*')
+    .eq('shift_id', shift_id)
+  console.log('[ADMIN DEBUG] shift_id:', shift_id, 'assignments:', JSON.stringify(debugAssignments), 'error:', JSON.stringify(debugError), 'env check:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
+
   // Fetch public holidays
   const { data: holidays } = await supabase
     .from('public_holidays')
@@ -76,8 +82,6 @@ export async function POST(request: Request) {
     publicHolidays,
     employeeWeeklyStats: [],
   })
-
-  console.log('[RULES DEBUG] shift_id:', shift_id, 'headcount:', shift.headcount, 'assignmentsOnShift:', (shiftAssignments ?? []).length, 'violations:', JSON.stringify(violations))
 
   const hasErrors = violations.some((v) => v.severity === 'error')
 
