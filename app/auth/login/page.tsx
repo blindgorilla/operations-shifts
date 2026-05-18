@@ -33,7 +33,7 @@ export default function LoginPage() {
       router.refresh()
     } else if (mode === 'forgot') {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password`,
+        redirectTo: `https://operations-shifts.vercel.app/auth/callback?next=/auth/reset-password`,
       })
       if (error) { setError(error.message); setLoading(false); return }
       setSuccess('Password reset email sent. Check your inbox.')
