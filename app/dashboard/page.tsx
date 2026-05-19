@@ -71,12 +71,23 @@ export default async function DashboardPage() {
   if (employee.role === 'manager') {
     const { data: allAssignments } = await adminClient
       .from('shift_assignments')
-      .select('shift_id, employee:employees(name)')
+      .select('shift_id, employee_id')
+
+    const assignmentEmployeeIds = [...new Set((allAssignments ?? []).map(a => a.employee_id))]
+    const { data: assignmentEmployeeList } = assignmentEmployeeIds.length > 0
+      ? await adminClient.from('employees').select('id, name').in('id', assignmentEmployeeIds)
+      : { data: [] }
+
+    const employeeNameMap: Record<string, string> = {}
+    for (const e of assignmentEmployeeList ?? []) {
+      employeeNameMap[e.id] = e.name
+    }
 
     const assignmentsByShift: Record<string, string[]> = {}
     for (const a of allAssignments ?? []) {
       if (!assignmentsByShift[a.shift_id]) assignmentsByShift[a.shift_id] = []
-      if ((a.employee as any)?.name) assignmentsByShift[a.shift_id].push((a.employee as any).name)
+      const name = employeeNameMap[a.employee_id]
+      if (name) assignmentsByShift[a.shift_id].push(name)
     }
 
     shiftsWithCounts = shiftsWithCounts.map(s => ({
