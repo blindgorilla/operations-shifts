@@ -116,6 +116,28 @@ export default function ShiftCalendarClient({
     setSelectedShift(null)
   }, [])
 
+  const CustomEvent = useCallback(({ event }: { event: CalEvent }) => {
+    const employees = (event.resource as any).assigned_employees ?? []
+    return (
+      <div className="group relative w-full h-full px-1 text-xs leading-tight overflow-hidden">
+        <span>{event.title}</span>
+        {employee.role === 'manager' && employees.length > 0 && (
+          <div className="invisible group-hover:visible absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-lg pointer-events-none">
+            <p className="font-medium mb-1">Assigned:</p>
+            {employees.map((name: string, i: number) => (
+              <p key={i}>{name}</p>
+            ))}
+          </div>
+        )}
+        {employee.role === 'manager' && employees.length === 0 && (
+          <div className="invisible group-hover:visible absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-lg pointer-events-none">
+            No one assigned yet
+          </div>
+        )}
+      </div>
+    )
+  }, [employee.role])
+
   const eventStyleGetter = useCallback((event: CalEvent) => {
     if (employee.role === 'manager') {
       const count = (event.resource as any).assignment_count ?? 0
@@ -193,6 +215,7 @@ export default function ShiftCalendarClient({
             defaultView={Views.MONTH}
             style={{ height: '100%' }}
             eventPropGetter={eventStyleGetter}
+            components={{ event: CustomEvent as any }}
             onSelectEvent={(event: CalEvent) => setSelectedShift(event.resource)}
           />
         </div>
