@@ -67,7 +67,7 @@ export default function ShiftCalendarClient({
   weeklyRequired = 5,
   employeeCoverage,
 }: ShiftCalendarClientProps) {
-  const [view, setView] = useState<'calendar' | 'list'>('list')
+  const [view, setView] = useState<'list' | 'calendar'>(employee.role === 'manager' ? 'calendar' : 'list')
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null)
   const [requestedIds, setRequestedIds] = useState(new Set(requestedShiftIds))
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
