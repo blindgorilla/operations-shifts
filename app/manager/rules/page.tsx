@@ -373,7 +373,7 @@ export default function RulesPage() {
               <div className="flex gap-2 pt-4">
                 <button
                   type="submit"
-                  className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+                  className="flex-1 bg-[#1B3A5C] text-white py-2 rounded hover:bg-[#2a4a6b]"
                 >
                   {editingRule ? 'Update' : 'Create'}
                 </button>

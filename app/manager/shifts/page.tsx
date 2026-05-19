@@ -52,12 +52,12 @@ export default async function ManagerShiftsPage() {
 
         {/* Quick how-to if no shifts yet */}
         {shiftsWithCounts.length === 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-6">
-            <h2 className="font-semibold text-blue-900 mb-1">Create your first shift</h2>
-            <p className="text-sm text-blue-700 mb-3">
+          <div className="bg-[#1B3A5C]/5 border border-[#1B3A5C]/20 rounded-xl p-5 mb-6">
+            <h2 className="font-semibold text-[#1B3A5C] mb-1">Create your first shift</h2>
+            <p className="text-sm text-[#1B3A5C] mb-3">
               Shifts you create will appear here. Employees can only see and request shifts you <strong>publish</strong>.
             </p>
-            <div className="flex gap-6 text-sm text-blue-800">
+            <div className="flex gap-6 text-sm text-[#1B3A5C]">
               <span>1. Click <strong>+ New Shift</strong></span>
               <span>2. Fill in the details</span>
               <span>3. Tick <strong>Publish immediately</strong> or publish later</span>
@@ -73,7 +73,7 @@ export default async function ManagerShiftsPage() {
           </div>
           <Link
             href="/manager/shifts/new"
-            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            className="bg-[#1B3A5C] hover:bg-[#2a4a6b] text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
           >
             + New Shift
           </Link>

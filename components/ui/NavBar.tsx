@@ -47,12 +47,12 @@ export default function NavBar({ employee, pendingCount: initialCount = 0 }: Nav
   const links: NavLink[] = employee.role === 'manager' ? [...employeeLinks, ...managerLinks] : employeeLinks
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <header className="bg-[#1B3A5C] sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-14">
           {/* Brand */}
           <div className="flex items-center gap-6">
-            <Link href="/dashboard" className="flex items-center gap-2 text-blue-600 font-semibold text-sm">
+            <Link href="/dashboard" className="flex items-center gap-2 text-white font-semibold text-sm">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
@@ -66,8 +66,8 @@ export default function NavBar({ employee, pendingCount: initialCount = 0 }: Nav
                   href={link.href}
                   className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                     pathname === link.href
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                      ? 'bg-white/15 text-white'
+                      : 'text-gray-300 hover:text-white hover:bg-white/10'
                   }`}
                 >
                   {link.label}
@@ -89,12 +89,12 @@ export default function NavBar({ employee, pendingCount: initialCount = 0 }: Nav
             )}
 
             <div className="text-right hidden sm:block">
-              <p className="text-sm font-medium text-gray-900">{employee.name}</p>
-              <p className="text-xs text-gray-500 capitalize">{employee.role}</p>
+              <p className="text-sm font-medium text-white">{employee.name}</p>
+              <p className="text-xs text-gray-300 capitalize">{employee.role}</p>
             </div>
             <button
               onClick={handleSignOut}
-              className="text-sm text-gray-500 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+              className="text-sm text-gray-300 hover:text-white px-2 py-1 rounded hover:bg-white/10 transition-colors"
             >
               Sign out
             </button>
