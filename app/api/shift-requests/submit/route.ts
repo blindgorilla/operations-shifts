@@ -119,6 +119,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ needs_confirmation: true, violations: otherViolations }, { status: 200 })
   }
 
+  // Remove any existing denied request so the unique constraint doesn't block re-requests
+  await admin
+    .from('shift_requests')
+    .delete()
+    .eq('employee_id', user.id)
+    .eq('shift_id', shift_id)
+    .eq('status', 'denied')
+
   // Insert request
   const { data: newRequest, error: insertError } = await supabase
     .from('shift_requests')
