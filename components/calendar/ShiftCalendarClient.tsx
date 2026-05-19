@@ -21,6 +21,9 @@ interface ShiftCalendarClientProps {
   employee: Employee
   requestedShiftIds: string[]
   assignedShiftIds: string[]
+  weeklyAssignedCount?: number
+  weeklyRequired?: number
+  employeeCoverage?: { id: string; name: string; assigned: number; required: number }[]
 }
 
 const SHIFT_COLORS: Record<string, string> = {
@@ -60,6 +63,9 @@ export default function ShiftCalendarClient({
   employee,
   requestedShiftIds,
   assignedShiftIds,
+  weeklyAssignedCount,
+  weeklyRequired = 5,
+  employeeCoverage,
 }: ShiftCalendarClientProps) {
   const [view, setView] = useState<'calendar' | 'list'>('list')
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null)
@@ -136,6 +142,16 @@ export default function ShiftCalendarClient({
         </div>
       )}
 
+      {/* Employee weekly shift banner */}
+      {employee.role === 'employee' && weeklyAssignedCount !== undefined && (
+        <div className={`mb-6 p-4 rounded-lg border ${weeklyAssignedCount >= weeklyRequired ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+          <p className={`text-sm font-medium ${weeklyAssignedCount >= weeklyRequired ? 'text-green-700' : 'text-amber-700'}`}>
+            You have {weeklyAssignedCount}/{weeklyRequired} shifts assigned this week
+            {weeklyAssignedCount < weeklyRequired && ` — you still need ${weeklyRequired - weeklyAssignedCount} more`}
+          </p>
+        </div>
+      )}
+
       {/* View toggle */}
       <div className="flex items-center gap-2 mb-4">
         <button
@@ -201,6 +217,24 @@ export default function ShiftCalendarClient({
               onRequest={handleRequest}
             />
           ))}
+        </div>
+      )}
+
+      {/* Manager weekly staff coverage */}
+      {employee.role === 'manager' && employeeCoverage && (
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold mb-4">Weekly Staff Coverage</h2>
+          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+            {employeeCoverage.map(emp => (
+              <div key={emp.id} className="flex items-center justify-between px-4 py-3">
+                <span className="text-sm font-medium text-gray-900">{emp.name}</span>
+                <span className={`text-sm font-medium px-2 py-0.5 rounded-full ${emp.assigned >= emp.required ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                  {emp.assigned}/{emp.required} shifts
+                  {emp.assigned < emp.required && ' ⚠'}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
