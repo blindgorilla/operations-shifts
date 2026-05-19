@@ -67,15 +67,41 @@ export async function PATCH(
   }
 
   if (action === 'approve') {
-    const { data: existingAssignments } = await admin
+    const { data: rawExistingAssignments } = await admin
       .from('shift_assignments')
-      .select('*, shift:shifts(*)')
+      .select('*')
       .eq('employee_id', shiftRequest.employee_id)
 
-    const { data: allAssignmentsOnShift } = await admin
+    const existingShiftIds = (rawExistingAssignments ?? []).map((a: any) => a.shift_id)
+    const { data: existingShifts } = existingShiftIds.length > 0
+      ? await admin.from('shifts').select('*').in('id', existingShiftIds)
+      : { data: [] }
+
+    const existingShiftMap: Record<string, any> = {}
+    for (const s of existingShifts ?? []) existingShiftMap[s.id] = s
+
+    const existingAssignments = (rawExistingAssignments ?? []).map((a: any) => ({
+      ...a,
+      shift: existingShiftMap[a.shift_id] ?? null,
+    }))
+
+    const { data: rawAllAssignmentsOnShift } = await admin
       .from('shift_assignments')
-      .select('*, employee:employees(*)')
+      .select('*')
       .eq('shift_id', shiftRequest.shift_id)
+
+    const onShiftEmployeeIds = (rawAllAssignmentsOnShift ?? []).map((a: any) => a.employee_id)
+    const { data: onShiftEmployees } = onShiftEmployeeIds.length > 0
+      ? await admin.from('employees').select('*').in('id', onShiftEmployeeIds)
+      : { data: [] }
+
+    const onShiftEmployeeMap: Record<string, any> = {}
+    for (const e of onShiftEmployees ?? []) onShiftEmployeeMap[e.id] = e
+
+    const allAssignmentsOnShift = (rawAllAssignmentsOnShift ?? []).map((a: any) => ({
+      ...a,
+      employee: onShiftEmployeeMap[a.employee_id] ?? null,
+    }))
 
     const { data: holidays } = await admin
       .from('public_holidays')

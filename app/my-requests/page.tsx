@@ -18,11 +18,24 @@ export default async function MyRequestsPage() {
   const { data: employee } = await supabase.from('employees').select('*').eq('id', user.id).single()
   if (!employee) redirect('/auth/login')
 
-  const { data: requests } = await supabase
+  const { data: rawRequests } = await supabase
     .from('shift_requests')
-    .select('*, shift:shifts(*)')
-    .eq('employee_id', user.id)
+    .select('*')
+    .eq('employee_id', employee.id)
     .order('created_at', { ascending: false })
+
+  const requestShiftIds = (rawRequests ?? []).map((r: any) => r.shift_id)
+  const { data: requestShifts } = requestShiftIds.length > 0
+    ? await supabase.from('shifts').select('*').in('id', requestShiftIds)
+    : { data: [] }
+
+  const shiftMap: Record<string, any> = {}
+  for (const s of requestShifts ?? []) shiftMap[s.id] = s
+
+  const requests = (rawRequests ?? []).map((r: any) => ({
+    ...r,
+    shift: shiftMap[r.shift_id] ?? null,
+  }))
 
   return (
     <div className="min-h-screen flex flex-col">
