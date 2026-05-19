@@ -66,18 +66,68 @@ export default async function DashboardPage() {
   const requestedShiftIds = new Set((myRequests ?? []).map((r) => r.shift_id))
   const assignedShiftIds = new Set((myAssignments ?? []).map((a) => a.shift_id))
 
+  // Get current week boundaries (Mon-Sun)
+  const now = new Date()
+  const dayOfWeek = now.getDay() // 0=Sun, 6=Sat
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+  const monday = new Date(now)
+  monday.setDate(now.getDate() + mondayOffset)
+  monday.setHours(0, 0, 0, 0)
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+  sunday.setHours(23, 59, 59, 999)
+  const weekStart = monday.toISOString().split('T')[0]
+  const weekEnd = sunday.toISOString().split('T')[0]
+
+  const adminClient = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
   // Pending count for manager badge
   let pendingCount = 0
+  let employeeCoverage: { id: string; name: string; assigned: number; required: number }[] | undefined
   if (employee.role === 'manager') {
-    const admin = createAdminClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
-    const { count } = await admin
+    const { count } = await adminClient
       .from('shift_requests')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'pending')
     pendingCount = count ?? 0
+
+    const { data: allEmployees } = await adminClient
+      .from('employees')
+      .select('id, name, role')
+      .eq('role', 'employee')
+      .order('name')
+
+    const { data: allWeekAssignments } = await adminClient
+      .from('shift_assignments')
+      .select('employee_id, shift:shifts(date)')
+      .gte('shift.date', weekStart)
+      .lte('shift.date', weekEnd)
+
+    const validAllAssignments = (allWeekAssignments ?? []).filter(a => a.shift !== null)
+
+    employeeCoverage = (allEmployees ?? []).map(emp => ({
+      id: emp.id,
+      name: emp.name,
+      assigned: validAllAssignments.filter(a => a.employee_id === emp.id).length,
+      required: 5,
+    }))
+  }
+
+  // Employee weekly assignment count
+  let weeklyAssignedCount: number | undefined
+  if (employee.role === 'employee') {
+    const { data: myWeekAssignments } = await adminClient
+      .from('shift_assignments')
+      .select('*, shift:shifts(date)')
+      .eq('employee_id', employee.id)
+      .gte('shift.date', weekStart)
+      .lte('shift.date', weekEnd)
+
+    const validAssignments = (myWeekAssignments ?? []).filter(a => a.shift !== null)
+    weeklyAssignedCount = validAssignments.length
   }
 
   return (
@@ -102,6 +152,9 @@ export default async function DashboardPage() {
           employee={employee}
           requestedShiftIds={Array.from(requestedShiftIds)}
           assignedShiftIds={Array.from(assignedShiftIds)}
+          weeklyAssignedCount={weeklyAssignedCount}
+          weeklyRequired={5}
+          employeeCoverage={employeeCoverage}
         />
       </main>
     </div>
