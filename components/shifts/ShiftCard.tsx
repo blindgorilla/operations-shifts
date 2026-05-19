@@ -73,14 +73,20 @@ export default function ShiftCard({ shift, violations = [], hasRequested, isAssi
 
         {showFullBadge ? (
           <span className="text-xs font-medium px-2 py-1 rounded-full bg-gray-200 text-gray-500">Full</span>
-        ) : (!isAssigned && !hasRequested && !hasErrors && (
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="shrink-0 text-sm font-medium bg-white border border-current rounded-lg px-3 py-1.5 hover:bg-white/80 transition-colors"
-          >
-            Request
-          </button>
-        ))}
+        ) : !isAssigned && !hasRequested && !hasErrors ? (
+          shift.request_status === 'open' ? (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="shrink-0 text-sm font-medium bg-white border border-current rounded-lg px-3 py-1.5 hover:bg-white/80 transition-colors"
+            >
+              Request
+            </button>
+          ) : shift.request_status === 'reviewing' ? (
+            <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-100 text-amber-600">Requests closed</span>
+          ) : (
+            <span className="text-xs font-medium px-2 py-1 rounded-full bg-gray-100 text-gray-500">Requests not open yet</span>
+          )
+        ) : null}
       </div>
 
       {violations.length > 0 && (
@@ -89,7 +95,7 @@ export default function ShiftCard({ shift, violations = [], hasRequested, isAssi
         </div>
       )}
 
-      {expanded && !showFullBadge && (
+      {expanded && !showFullBadge && shift.request_status === 'open' && (
         <div className="mt-3 space-y-2 border-t border-current/10 pt-3">
           <textarea
             value={note}
