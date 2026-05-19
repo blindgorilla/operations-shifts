@@ -21,6 +21,11 @@ export default async function DashboardPage() {
 
   if (!employee) redirect('/auth/login')
 
+  const adminClient = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
   // Fetch upcoming shifts — managers see all, employees see only published
   const today = new Date().toISOString().split('T')[0]
   let shiftsQuery = supabase
@@ -95,11 +100,6 @@ export default async function DashboardPage() {
   sunday.setHours(23, 59, 59, 999)
   const weekStart = monday.toISOString().split('T')[0]
   const weekEnd = sunday.toISOString().split('T')[0]
-
-  const adminClient = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
 
   // Pending count for manager badge
   let pendingCount = 0
