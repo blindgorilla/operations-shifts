@@ -14,15 +14,53 @@ const SHIFT_BADGE: Record<string, string> = {
   night: 'bg-indigo-100 text-indigo-800',
 }
 
+function deriveWindowStatus(shifts: Shift[]): 'open' | 'reviewing' | 'closed' | 'mixed' {
+  const published = shifts.filter((s) => s.is_published)
+  if (published.length === 0) return 'closed'
+  const statuses = new Set(published.map((s) => s.request_status))
+  if (statuses.size === 1) return [...statuses][0] as 'open' | 'reviewing' | 'closed'
+  return 'mixed'
+}
+
 export default function ManagerShiftsClient({ shifts: initial }: Props) {
   const [shifts, setShifts] = useState(initial)
   const [loading, setLoading] = useState<string | null>(null)
+  const [actionLoading, setActionLoading] = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const router = useRouter()
 
   const showToast = (type: 'success' | 'error', message: string) => {
     setToast({ type, message })
     setTimeout(() => setToast(null), 3000)
+  }
+
+  async function setRequestStatus(status: 'open' | 'reviewing') {
+    const confirmMsg =
+      status === 'open'
+        ? 'This will open all published shifts for employee requests. Continue?'
+        : 'This will close the request window. Employees will no longer be able to request shifts. Continue?'
+    if (!confirm(confirmMsg)) return
+
+    setActionLoading(true)
+    try {
+      const res = await fetch('/api/shifts/request-status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) {
+        const { error } = await res.json()
+        showToast('error', error ?? 'Failed to update request status')
+      } else {
+        setShifts((prev) =>
+          prev.map((s) => (s.is_published ? { ...s, request_status: status } : s))
+        )
+        showToast('success', status === 'open' ? 'Request window opened' : 'Request window closed')
+      }
+    } catch {
+      showToast('error', 'Network error')
+    }
+    setActionLoading(false)
   }
 
   async function togglePublish(shift: Shift) {
@@ -65,11 +103,51 @@ export default function ManagerShiftsClient({ shifts: initial }: Props) {
     )
   }
 
+  const windowStatus = deriveWindowStatus(shifts)
+  const hasPublished = shifts.some((s) => s.is_published)
+  const hasOpen = shifts.some((s) => s.request_status === 'open')
+  const hasNonOpen = shifts.some((s) => s.is_published && s.request_status !== 'open')
+
+  const statusLabel =
+    windowStatus === 'open'
+      ? 'Request window: Open ✅'
+      : windowStatus === 'reviewing'
+      ? 'Request window: Under review 🟡'
+      : windowStatus === 'closed'
+      ? 'Request window: Closed 🔴'
+      : 'Request window: Mixed 🟡'
+
   return (
     <div>
       {toast && (
         <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium text-white ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
           {toast.message}
+        </div>
+      )}
+
+      {hasPublished && (
+        <div className="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 mb-4">
+          <span className="text-sm font-medium text-gray-700">{statusLabel}</span>
+          <div className="flex gap-2">
+            {hasNonOpen && (
+              <button
+                onClick={() => setRequestStatus('open')}
+                disabled={actionLoading}
+                className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors"
+              >
+                Open Requests
+              </button>
+            )}
+            {hasOpen && (
+              <button
+                onClick={() => setRequestStatus('reviewing')}
+                disabled={actionLoading}
+                className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors"
+              >
+                Close Requests
+              </button>
+            )}
+          </div>
         </div>
       )}
 
