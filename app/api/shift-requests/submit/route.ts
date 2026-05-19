@@ -8,6 +8,7 @@ import { z } from 'zod'
 const submitSchema = z.object({
   shift_id: z.string().uuid(),
   employee_note: z.string().optional(),
+  confirm_violations: z.boolean().optional(),
 })
 
 export async function POST(request: Request) {
@@ -111,6 +112,11 @@ export async function POST(request: Request) {
       message: 'All spots for this shift have been filled.',
       violations: headcountViolations,
     }, { status: 422 })
+  }
+
+  const hasErrors = otherViolations.some((v) => v.severity === 'error')
+  if (hasErrors && !parsed.data.confirm_violations) {
+    return NextResponse.json({ needs_confirmation: true, violations: otherViolations }, { status: 200 })
   }
 
   // Insert request
