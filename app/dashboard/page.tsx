@@ -21,6 +21,11 @@ export default async function DashboardPage() {
 
   if (!employee) redirect('/auth/login')
 
+  const adminClient = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
   // Fetch upcoming shifts — managers see all, employees see only published
   const today = new Date().toISOString().split('T')[0]
   let shiftsQuery = supabase
@@ -58,10 +63,38 @@ export default async function DashboardPage() {
     countMap[a.shift_id] = (countMap[a.shift_id] ?? 0) + 1
   }
 
-  const shiftsWithCounts = (shifts ?? []).map((s) => ({
+  let shiftsWithCounts = (shifts ?? []).map((s) => ({
     ...s,
     assignment_count: countMap[s.id] ?? 0,
   }))
+
+  if (employee.role === 'manager') {
+    const { data: allAssignments } = await adminClient
+      .from('shift_assignments')
+      .select('shift_id, employee_id')
+
+    const assignmentEmployeeIds = [...new Set((allAssignments ?? []).map(a => a.employee_id))]
+    const { data: assignmentEmployeeList } = assignmentEmployeeIds.length > 0
+      ? await adminClient.from('employees').select('id, name').in('id', assignmentEmployeeIds)
+      : { data: [] }
+
+    const employeeNameMap: Record<string, string> = {}
+    for (const e of assignmentEmployeeList ?? []) {
+      employeeNameMap[e.id] = e.name
+    }
+
+    const assignmentsByShift: Record<string, string[]> = {}
+    for (const a of allAssignments ?? []) {
+      if (!assignmentsByShift[a.shift_id]) assignmentsByShift[a.shift_id] = []
+      const name = employeeNameMap[a.employee_id]
+      if (name) assignmentsByShift[a.shift_id].push(name)
+    }
+
+    shiftsWithCounts = shiftsWithCounts.map(s => ({
+      ...s,
+      assigned_employees: assignmentsByShift[s.id] ?? [],
+    }))
+  }
 
   const requestedShiftIds = new Set((myRequests ?? []).map((r) => r.shift_id))
   const assignedShiftIds = new Set((myAssignments ?? []).map((a) => a.shift_id))
@@ -78,11 +111,6 @@ export default async function DashboardPage() {
   sunday.setHours(23, 59, 59, 999)
   const weekStart = monday.toISOString().split('T')[0]
   const weekEnd = sunday.toISOString().split('T')[0]
-
-  const adminClient = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
 
   // Pending count for manager badge
   let pendingCount = 0

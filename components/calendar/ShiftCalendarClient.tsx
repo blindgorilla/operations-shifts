@@ -116,6 +116,18 @@ export default function ShiftCalendarClient({
     setSelectedShift(null)
   }, [])
 
+  const CustomEvent = useCallback(({ event }: { event: CalEvent }) => {
+    const employees = (event.resource as any).assigned_employees ?? []
+    const tooltipText = employees.length > 0
+      ? `Assigned: ${employees.join(', ')}`
+      : 'No one assigned yet'
+    return (
+      <div title={employee.role === 'manager' ? tooltipText : undefined} className="w-full h-full px-1 text-xs leading-tight overflow-hidden">
+        {event.title}
+      </div>
+    )
+  }, [employee.role])
+
   const eventStyleGetter = useCallback((event: CalEvent) => {
     if (employee.role === 'manager') {
       const count = (event.resource as any).assignment_count ?? 0
@@ -193,6 +205,7 @@ export default function ShiftCalendarClient({
             defaultView={Views.MONTH}
             style={{ height: '100%' }}
             eventPropGetter={eventStyleGetter}
+            components={{ event: CustomEvent as any }}
             onSelectEvent={(event: CalEvent) => setSelectedShift(event.resource)}
           />
         </div>
