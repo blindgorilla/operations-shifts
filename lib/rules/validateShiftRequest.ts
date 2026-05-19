@@ -1,6 +1,6 @@
 import { differenceInHours, parseISO, format, getDay, addDays } from 'date-fns'
 import type { Employee, Shift, ShiftAssignment, RuleViolation, SchedulingRule } from '@/types'
-import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 
 interface ValidationInput {
   employee: Employee
@@ -48,8 +48,11 @@ export async function validateShiftRequest(input: ValidationInput): Promise<Rule
   const { employee, requestedShift, existingAssignments, allAssignmentsOnShift, publicHolidays } = input
 
   // Fetch enabled rules from database
-  const supabase = await createClient()
-  const { data: rules, error } = await supabase
+  const admin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+  const { data: rules, error } = await admin
     .from('scheduling_rules')
     .select('*')
     .eq('is_enabled', true)

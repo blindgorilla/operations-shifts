@@ -8,6 +8,7 @@ import { z } from 'zod'
 const submitSchema = z.object({
   shift_id: z.string().uuid(),
   employee_note: z.string().optional(),
+  confirm_violations: z.boolean().optional(),
 })
 
 export async function POST(request: Request) {
@@ -44,16 +45,29 @@ export async function POST(request: Request) {
   if (!shift.is_published) return NextResponse.json({ error: 'Shift not available' }, { status: 400 })
   if (shift.request_status !== 'open') return NextResponse.json({ error: 'Requests are not open for this shift' }, { status: 403 })
 
-  // Fetch employee's existing assignments (with shift details)
-  const { data: existingAssignments } = await supabase
-    .from('shift_assignments')
-    .select('*, shift:shifts(*)')
-    .eq('employee_id', user.id)
-
   const admin = createAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
+
+  // Fetch employee's existing assignments (with shift details)
+  const { data: existingAssignments } = await admin
+    .from('shift_assignments')
+    .select('*')
+    .eq('employee_id', user.id)
+
+  const assignmentShiftIds = (existingAssignments ?? []).map((a: any) => a.shift_id)
+  const { data: assignmentShifts } = assignmentShiftIds.length > 0
+    ? await admin.from('shifts').select('*').in('id', assignmentShiftIds)
+    : { data: [] }
+
+  const shiftMap: Record<string, any> = {}
+  for (const s of assignmentShifts ?? []) shiftMap[s.id] = s
+
+  const enrichedExistingAssignments = (existingAssignments ?? []).map((a: any) => ({
+    ...a,
+    shift: shiftMap[a.shift_id] ?? null,
+  }))
 
   // Fetch all assignments on the requested shift (to check headcount + new employee rule)
   const { data: shiftAssignments } = await admin
@@ -83,7 +97,7 @@ export async function POST(request: Request) {
   const violations = await validateShiftRequest({
     employee,
     requestedShift: shift,
-    existingAssignments: (existingAssignments ?? []) as any,
+    existingAssignments: enrichedExistingAssignments as any,
     allAssignmentsOnShift: (enrichedShiftAssignments ?? []) as any,
     publicHolidays,
     employeeWeeklyStats: [],
@@ -99,6 +113,19 @@ export async function POST(request: Request) {
       violations: headcountViolations,
     }, { status: 422 })
   }
+
+  const hasErrors = otherViolations.some((v) => v.severity === 'error')
+  if (hasErrors && !parsed.data.confirm_violations) {
+    return NextResponse.json({ needs_confirmation: true, violations: otherViolations }, { status: 200 })
+  }
+
+  // Remove any existing denied request so the unique constraint doesn't block re-requests
+  await admin
+    .from('shift_requests')
+    .delete()
+    .eq('employee_id', user.id)
+    .eq('shift_id', shift_id)
+    .eq('status', 'denied')
 
   // Insert request
   const { data: newRequest, error: insertError } = await supabase

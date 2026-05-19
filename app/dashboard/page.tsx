@@ -46,6 +46,7 @@ export default async function DashboardPage() {
     .from('shift_requests')
     .select('shift_id, status')
     .eq('employee_id', user.id)
+    .eq('status', 'pending')
 
   // Fetch employee's assignments
   const { data: myAssignments } = await supabase

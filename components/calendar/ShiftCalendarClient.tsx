@@ -74,6 +74,7 @@ export default function ShiftCalendarClient({
   const [violations, setViolations] = useState<RuleViolation[]>([])
   const [pendingViolations, setPendingViolations] = useState<RuleViolation[] | null>(null)
   const [pendingShiftId, setPendingShiftId] = useState<string | null>(null)
+  const [pendingNote, setPendingNote] = useState<string>('')
   const [shiftFullMessage, setShiftFullMessage] = useState<boolean>(false)
 
   const events = shifts.map(s => shiftToEvent(s, employee.role === 'manager'))
@@ -83,11 +84,15 @@ export default function ShiftCalendarClient({
     setTimeout(() => setToast(null), 4000)
   }
 
-  const handleRequest = useCallback(async (shiftId: string, note: string) => {
+  const handleRequest = useCallback(async (shiftId: string, note: string, confirmViolations?: boolean) => {
     const res = await fetch('/api/shift-requests/submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ shift_id: shiftId, employee_note: note }),
+      body: JSON.stringify({
+        shift_id: shiftId,
+        employee_note: note,
+        ...(confirmViolations ? { confirm_violations: true } : {}),
+      }),
     })
 
     const data = await res.json()
@@ -101,17 +106,15 @@ export default function ShiftCalendarClient({
       return
     }
 
-    const responseViolations: RuleViolation[] = data.violations ?? []
-    const hasErrorViolations = responseViolations.some((v) => v.severity === 'error')
-
-    if (hasErrorViolations) {
-      setPendingViolations(responseViolations)
+    if (data.needs_confirmation) {
+      setPendingViolations(data.violations ?? [])
       setPendingShiftId(shiftId)
+      setPendingNote(note)
       return
     }
 
     setRequestedIds((prev) => new Set([...prev, shiftId]))
-    setViolations(responseViolations)
+    setViolations(data.violations ?? [])
     showToast('success', 'Shift request submitted successfully')
     setSelectedShift(null)
   }, [])
@@ -269,7 +272,7 @@ export default function ShiftCalendarClient({
 
       {/* Violation confirmation modal */}
       {pendingViolations && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => { setPendingViolations(null); setPendingShiftId(null) }}>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => { setPendingViolations(null); setPendingShiftId(null); setPendingNote('') }}>
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-semibold mb-3">Heads up — scheduling notice</h2>
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg space-y-1">
@@ -279,19 +282,19 @@ export default function ShiftCalendarClient({
             </div>
             <div className="flex gap-3">
               <button
-                onClick={() => { setPendingViolations(null); setPendingShiftId(null) }}
+                onClick={() => { setPendingViolations(null); setPendingShiftId(null); setPendingNote('') }}
                 className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  if (pendingShiftId) setRequestedIds((prev) => new Set([...prev, pendingShiftId]))
-                  setViolations(pendingViolations)
-                  showToast('success', 'Shift request submitted successfully')
+                onClick={async () => {
+                  const shiftId = pendingShiftId
+                  const note = pendingNote
                   setPendingViolations(null)
                   setPendingShiftId(null)
-                  setSelectedShift(null)
+                  setPendingNote('')
+                  if (shiftId !== null) await handleRequest(shiftId, note, true)
                 }}
                 className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 rounded-lg text-sm transition-colors"
               >
