@@ -188,7 +188,7 @@ export default function NewShiftForm() {
           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
         />
         <label htmlFor="is_published" className="text-sm text-gray-700">
-          Publish immediately <span className="text-gray-400">(employees can see and request it)</span>
+          Publish immediately <span className="text-gray-400">(employees can see it on their calendar)</span>
         </label>
       </div>
 

@@ -1,5 +1,6 @@
 export type ShiftType = 'morning' | 'evening' | 'night'
 export type RequestStatus = 'pending' | 'approved' | 'denied'
+export type ShiftRequestStatus = 'closed' | 'open' | 'reviewing'
 export type UserRole = 'employee' | 'manager'
 
 export interface Employee {
@@ -28,6 +29,7 @@ export interface Shift {
   created_by: string | null
   created_at: string
   updated_at: string
+  request_status: ShiftRequestStatus
   // computed / joined
   request_count?: number
   assignment_count?: number

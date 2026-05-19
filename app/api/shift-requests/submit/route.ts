@@ -42,6 +42,7 @@ export async function POST(request: Request) {
 
   if (!shift) return NextResponse.json({ error: 'Shift not found' }, { status: 404 })
   if (!shift.is_published) return NextResponse.json({ error: 'Shift not available' }, { status: 400 })
+  if (shift.request_status !== 'open') return NextResponse.json({ error: 'Requests are not open for this shift' }, { status: 403 })
 
   // Fetch employee's existing assignments (with shift details)
   const { data: existingAssignments } = await supabase
