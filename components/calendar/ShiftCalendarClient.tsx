@@ -118,22 +118,12 @@ export default function ShiftCalendarClient({
 
   const CustomEvent = useCallback(({ event }: { event: CalEvent }) => {
     const employees = (event.resource as any).assigned_employees ?? []
+    const tooltipText = employees.length > 0
+      ? `Assigned: ${employees.join(', ')}`
+      : 'No one assigned yet'
     return (
-      <div className="group relative w-full h-full px-1 text-xs leading-tight overflow-hidden">
-        <span>{event.title}</span>
-        {employee.role === 'manager' && employees.length > 0 && (
-          <div className="invisible group-hover:visible absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-lg pointer-events-none">
-            <p className="font-medium mb-1">Assigned:</p>
-            {employees.map((name: string, i: number) => (
-              <p key={i}>{name}</p>
-            ))}
-          </div>
-        )}
-        {employee.role === 'manager' && employees.length === 0 && (
-          <div className="invisible group-hover:visible absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-lg pointer-events-none">
-            No one assigned yet
-          </div>
-        )}
+      <div title={employee.role === 'manager' ? tooltipText : undefined} className="w-full h-full px-1 text-xs leading-tight overflow-hidden">
+        {event.title}
       </div>
     )
   }, [employee.role])
