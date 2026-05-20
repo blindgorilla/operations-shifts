@@ -3,6 +3,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import NavBar from '@/components/ui/NavBar'
 import ManagerRequestsClient from '@/components/manager/ManagerRequestsClient'
+import InfoTooltip from '@/components/ui/InfoTooltip'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,7 +47,10 @@ export default async function ManagerRequestsPage() {
       <NavBar employee={employee} pendingCount={pendingCount} />
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Shift Requests</h1>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center">
+            Shift Requests
+            <InfoTooltip text="Review employee shift requests. Approve or deny each one. Requests with scheduling rule violations are flagged — you can override if needed." />
+          </h1>
           <p className="text-sm text-gray-500 mt-1">Review and approve employee shift requests</p>
         </div>
         <ManagerRequestsClient requests={requests ?? []} />

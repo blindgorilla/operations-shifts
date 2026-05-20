@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import NavBar from '@/components/ui/NavBar'
 import Link from 'next/link'
 import ManagerShiftsClient from '@/components/manager/ManagerShiftsClient'
+import InfoTooltip from '@/components/ui/InfoTooltip'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,7 +69,10 @@ export default async function ManagerShiftsPage() {
 
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Manage Shifts</h1>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center">
+              Manage Shifts
+              <InfoTooltip text="Create, publish, and manage shifts. Use the request window to control when employees can request shifts." />
+            </h1>
             <p className="text-sm text-gray-500 mt-1">Create and publish shifts for employees to request</p>
           </div>
           <Link

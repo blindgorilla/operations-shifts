@@ -7,6 +7,7 @@ import { format, parse, startOfWeek, getDay, parseISO } from 'date-fns'
 import { enUS } from 'date-fns/locale/en-US'
 import type { Shift, Employee, RuleViolation } from '@/types'
 import ShiftCard from '@/components/shifts/ShiftCard'
+import InfoTooltip from '@/components/ui/InfoTooltip'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 
 const localizer = dateFnsLocalizer({
@@ -276,7 +277,10 @@ export default function ShiftCalendarClient({
       {/* Manager weekly staff coverage */}
       {employee.role === 'manager' && employeeCoverage && (
         <div className="mt-8">
-          <h2 className="text-lg font-semibold mb-4">Weekly Staff Coverage</h2>
+          <h2 className="text-lg font-semibold mb-4 flex items-center">
+            Weekly Staff Coverage
+            <InfoTooltip text="Shows how many shifts each employee has assigned this week. Everyone needs 5 shifts. Use the calendar above to directly assign employees to open shifts." />
+          </h2>
           <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
             {employeeCoverage.map(emp => (
               <div key={emp.id} className="flex items-center justify-between px-4 py-3">
