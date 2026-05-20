@@ -83,10 +83,7 @@ export default function NavBar({ employee, pendingCount: initialCount = 0 }: Nav
 
           {/* User */}
           <div className="flex items-center gap-3">
-            {/* Bell notification dropdown for managers */}
-            {employee.role === 'manager' && (
-              <NotificationDropdown initialCount={pendingCount} />
-            )}
+            <NotificationDropdown />
 
             <div className="text-right hidden sm:block">
               <p className="text-sm font-medium text-white">{employee.name}</p>

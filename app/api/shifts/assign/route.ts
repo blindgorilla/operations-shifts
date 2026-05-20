@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { sendAssignmentEmail } from '@/lib/email/send'
+import { createNotification } from '@/lib/notifications'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
@@ -40,7 +42,7 @@ export async function POST(request: Request) {
 
   const { data: shift } = await admin
     .from('shifts')
-    .select('id, headcount')
+    .select('*')
     .eq('id', shift_id)
     .single()
 
@@ -79,6 +81,33 @@ export async function POST(request: Request) {
 
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 500 })
+  }
+
+  // Fetch employee for notification + email
+  const { data: employee } = await admin
+    .from('employees')
+    .select('*')
+    .eq('id', employee_id)
+    .single()
+
+  if (employee) {
+    try {
+      await createNotification({
+        employeeId: employee_id,
+        type: 'direct_assignment',
+        title: 'You have been assigned to a shift',
+        message: `Your manager assigned you to the ${shift.shift_type} shift on ${shift.date}.`,
+        link: '/dashboard',
+      })
+    } catch (notifError) {
+      console.error('Notification create failed:', notifError)
+    }
+
+    try {
+      await sendAssignmentEmail(employee, shift)
+    } catch (emailError) {
+      console.error('Email send failed:', emailError)
+    }
   }
 
   return NextResponse.json({ success: true, assignment })
