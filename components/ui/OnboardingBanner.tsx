@@ -7,17 +7,17 @@ interface OnboardingBannerProps {
 }
 
 const EMPLOYEE_STEPS = [
-  { icon: '📅', title: 'Browse available shifts', desc: 'The manager publishes shifts here. You can see the date, time, location and type of each shift.' },
-  { icon: '✋', title: 'Request a shift', desc: 'Click Request on any shift you want. Add an optional note for your manager. The app will check scheduling rules automatically.' },
-  { icon: '📬', title: 'Wait for approval', desc: 'Your manager reviews your request and approves or denies it. You will receive an email either way.' },
-  { icon: '✅', title: 'Check My Requests', desc: 'Track the status of all your requests at any time under the My Requests tab.' },
+  { icon: '📅', title: 'Browse shifts', desc: 'Your manager publishes available shifts. Check the calendar or list view.' },
+  { icon: '✋', title: 'Request shifts', desc: 'When the request window is open, click Request on any shift you want.' },
+  { icon: '📬', title: 'Track your requests', desc: 'Go to My Requests to see the status of each request.' },
+  { icon: '✅', title: 'Check your schedule', desc: 'The banner shows how many shifts you have this week. Aim for 5.' },
 ]
 
 const MANAGER_STEPS = [
-  { icon: '➕', title: 'Create shifts', desc: 'Go to Shifts → New Shift. Set the date, type (morning/evening/night), location, role, and how many employees can fill it.' },
-  { icon: '📢', title: 'Publish shifts', desc: 'Shifts start as drafts. When ready, publish them so employees can see and request them.' },
-  { icon: '📋', title: 'Review requests', desc: 'Go to Requests to see all pending employee requests. The app flags any scheduling rule violations automatically.' },
-  { icon: '✉️', title: 'Approve or deny', desc: 'Approve or deny each request with an optional note. The employee gets an email notification instantly.' },
+  { icon: '➕', title: 'Create & publish shifts', desc: 'Go to Shifts to create shifts with date, type, and headcount. Publish them when ready for employees to see.' },
+  { icon: '📋', title: 'Open request window', desc: 'Control when employees can request shifts. Open the window in the Shifts page, and close it when you\'re ready to review.' },
+  { icon: '✅', title: 'Review & approve', desc: 'Go to Requests to approve or deny. The system flags scheduling violations automatically. Check coverage on the calendar.' },
+  { icon: '👥', title: 'Fill the gaps', desc: 'Use the calendar to directly assign employees to open shifts. Check Weekly Staff Coverage to ensure everyone has 5 shifts.' },
 ]
 
 export default function OnboardingBanner({ role }: OnboardingBannerProps) {
@@ -35,19 +35,19 @@ export default function OnboardingBanner({ role }: OnboardingBannerProps) {
 
   const steps = role === 'manager' ? MANAGER_STEPS : EMPLOYEE_STEPS
   const title = role === 'manager'
-    ? 'Welcome, Manager — here is how Operations Shifts works'
+    ? 'Welcome, Manager — here\'s how the scheduling cycle works'
     : 'Welcome to Operations Shifts — here is how it works'
+
+  const subtitle = role === 'manager'
+    ? 'Publish shifts, open requests, review, and fill gaps. Dismiss this guide once you\'re familiar.'
+    : 'You can browse available shifts and request the ones you want to work.'
 
   return (
     <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-6">
       <div className="flex items-start justify-between gap-4 mb-4">
         <div>
           <h2 className="font-semibold text-blue-900 text-base">{title}</h2>
-          <p className="text-sm text-blue-700 mt-0.5">
-            {role === 'manager'
-              ? 'You have full access to create shifts, manage employees, and approve requests.'
-              : 'You can browse available shifts and request the ones you want to work.'}
-          </p>
+          <p className="text-sm text-blue-700 mt-0.5">{subtitle}</p>
         </div>
         <button
           onClick={dismiss}

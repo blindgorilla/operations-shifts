@@ -5,6 +5,7 @@ import { format, parseISO } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
 import type { Shift } from '@/types'
 import { useRouter } from 'next/navigation'
+import InfoTooltip from '@/components/ui/InfoTooltip'
 
 interface Props { shifts: Shift[] }
 
@@ -127,7 +128,10 @@ export default function ManagerShiftsClient({ shifts: initial }: Props) {
 
       {hasPublished && (
         <div className="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 mb-4">
-          <span className="text-sm font-medium text-gray-700">{statusLabel}</span>
+          <span className="text-sm font-medium text-gray-700 flex items-center">
+            {statusLabel}
+            <InfoTooltip text="When open, employees can request published shifts. Close it when you're ready to review requests and approve." />
+          </span>
           <div className="flex gap-2">
             {hasNonOpen && (
               <button

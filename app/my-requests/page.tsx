@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import NavBar from '@/components/ui/NavBar'
+import InfoTooltip from '@/components/ui/InfoTooltip'
 import { format, parseISO } from 'date-fns'
 import type { ShiftRequest } from '@/types'
 
@@ -42,7 +43,10 @@ export default async function MyRequestsPage() {
       <NavBar employee={employee} />
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">My Requests</h1>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center">
+            My Requests
+            <InfoTooltip text="Track all your shift requests here. You'll see whether each request is pending, approved, or denied." />
+          </h1>
           <p className="text-sm text-gray-500 mt-1">Track the status of your shift requests</p>
         </div>
 

@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import NavBar from '@/components/ui/NavBar'
 import ShiftCalendarClient from '@/components/calendar/ShiftCalendarClient'
 import OnboardingBanner from '@/components/ui/OnboardingBanner'
+import InfoTooltip from '@/components/ui/InfoTooltip'
 
 export const dynamic = 'force-dynamic'
 
@@ -180,8 +181,13 @@ export default async function DashboardPage() {
         <OnboardingBanner role={employee.role as 'employee' | 'manager'} />
 
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center">
             {employee.role === 'manager' ? 'All Shifts' : 'Available Shifts'}
+            {employee.role === 'manager' ? (
+              <InfoTooltip text="Overview of all shifts with coverage status. Red = empty, amber = partially filled, green = fully staffed. Hover over a shift to see assigned employees." />
+            ) : (
+              <InfoTooltip text="Browse upcoming shifts published by your manager. You can request shifts when the request window is open." />
+            )}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             {employee.role === 'manager'
