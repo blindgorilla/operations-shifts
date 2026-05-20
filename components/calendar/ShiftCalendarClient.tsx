@@ -72,6 +72,9 @@ export default function ShiftCalendarClient({
   allEmployees = [],
 }: ShiftCalendarClientProps) {
   const router = useRouter()
+  const [dashboardTab, setDashboardTab] = useState<'available' | 'schedule'>(
+    employee.role === 'employee' ? 'schedule' : 'available'
+  )
   const [view, setView] = useState<'list' | 'calendar'>(employee.role === 'manager' ? 'calendar' : 'list')
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null)
   const [requestedIds, setRequestedIds] = useState(new Set(requestedShiftIds))
@@ -86,6 +89,24 @@ export default function ShiftCalendarClient({
   const [assignOverride, setAssignOverride] = useState(false)
 
   const events = shifts.map(s => shiftToEvent(s, employee.role === 'manager'))
+
+  const assignedShifts = shifts.filter(s => assignedShiftIds.includes(s.id))
+  const scheduleEvents = assignedShifts.map(s => {
+    const [sh, sm] = s.start_time.split(':').map(Number)
+    const [eh, em] = s.end_time.split(':').map(Number)
+    const start = parseISO(s.date)
+    start.setHours(sh, sm)
+    const end = parseISO(s.date)
+    end.setHours(eh, em)
+    if (eh < sh || (eh === sh && em < sm)) end.setDate(end.getDate() + 1)
+    const label = `${s.shift_type.charAt(0).toUpperCase() + s.shift_type.slice(1)} ${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`
+    return { id: s.id, title: label, start, end, resource: s }
+  })
+
+  const scheduleEventStyleGetter = (event: CalEvent) => {
+    const color = SHIFT_COLORS[event.resource.shift_type] ?? '#6b7280'
+    return { style: { backgroundColor: color, borderRadius: '6px', border: 'none', color: '#fff', fontSize: '12px' } }
+  }
 
   const showToast = (type: 'success' | 'error', message: string) => {
     setToast({ type, message })
@@ -191,6 +212,25 @@ export default function ShiftCalendarClient({
         </div>
       )}
 
+      {/* Employee dashboard tab toggle */}
+      {employee.role === 'employee' && (
+        <div className="flex items-center gap-2 mb-4">
+          {(['available', 'schedule'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setDashboardTab(tab)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                dashboardTab === tab
+                  ? 'bg-[#1B3A5C] text-white'
+                  : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {tab === 'available' ? 'Available Shifts' : 'My Schedule'}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Employee weekly shift banner */}
       {employee.role === 'employee' && weeklyAssignedCount !== undefined && (
         <div className={`mb-6 p-4 rounded-lg border ${weeklyAssignedCount >= weeklyRequired ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
@@ -201,6 +241,43 @@ export default function ShiftCalendarClient({
         </div>
       )}
 
+      {/* My Schedule view */}
+      {employee.role === 'employee' && dashboardTab === 'schedule' && (
+        <div>
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">My Schedule</h2>
+            <p className="text-sm text-gray-500 mt-0.5">Your assigned shifts for the month</p>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-gray-500 mb-3">
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" /> Morning</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" /> Evening</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block" /> Night</span>
+          </div>
+          {scheduleEvents.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 py-16 text-center text-gray-400">
+              <svg className="w-10 h-10 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p className="text-sm">No assigned shifts this month</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 p-4" style={{ height: 600 }}>
+              <Calendar
+                localizer={localizer}
+                events={scheduleEvents}
+                defaultView={Views.MONTH}
+                style={{ height: '100%' }}
+                eventPropGetter={scheduleEventStyleGetter}
+                onSelectEvent={(event: CalEvent) => setSelectedShift(event.resource)}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Available Shifts view (existing UI) */}
+      {(employee.role !== 'employee' || dashboardTab === 'available') && (
+        <>
       {/* View toggle */}
       <div className="flex items-center gap-2 mb-4">
         <button
@@ -294,6 +371,44 @@ export default function ShiftCalendarClient({
           </div>
         </div>
       )}
+        </>
+      )}
+
+      {/* My Schedule shift detail modal */}
+      {selectedShift && employee.role === 'employee' && dashboardTab === 'schedule' && (
+        <div className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4" onClick={() => setSelectedShift(null)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-start mb-4">
+              <h2 className="text-lg font-semibold">Shift Details</h2>
+              <button onClick={() => setSelectedShift(null)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="font-medium text-gray-700 w-20">Type</span>
+                <span className="capitalize text-gray-900">{selectedShift.shift_type}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="font-medium text-gray-700 w-20">Date</span>
+                <span className="text-gray-900">{selectedShift.date}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="font-medium text-gray-700 w-20">Time</span>
+                <span className="text-gray-900">{selectedShift.start_time?.slice(0, 5)} – {selectedShift.end_time?.slice(0, 5)}</span>
+              </div>
+              {selectedShift.location && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-medium text-gray-700 w-20">Location</span>
+                  <span className="text-gray-900">{selectedShift.location}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Shift full modal */}
       {shiftFullMessage && (
@@ -347,7 +462,7 @@ export default function ShiftCalendarClient({
       )}
 
       {/* Calendar shift modal — employee */}
-      {selectedShift && view === 'calendar' && employee.role !== 'manager' && (
+      {selectedShift && view === 'calendar' && employee.role !== 'manager' && dashboardTab === 'available' && (
         <div className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4" onClick={() => { setSelectedShift(null); setViolations([]) }}>
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start mb-4">

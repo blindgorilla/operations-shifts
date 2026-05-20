@@ -27,12 +27,16 @@ export default async function DashboardPage() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  // Fetch upcoming shifts — managers see all, employees see only published
-  const today = new Date().toISOString().split('T')[0]
+  // Fetch upcoming shifts — managers see all future, employees see full current month
+  const now = new Date()
+  const today = now.toISOString().split('T')[0]
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+  const dateFilter = employee.role === 'employee' ? monthStart : today
+
   let shiftsQuery = supabase
     .from('shifts')
     .select('*')
-    .gte('date', today)
+    .gte('date', dateFilter)
     .order('date', { ascending: true })
     .order('start_time', { ascending: true })
 
@@ -116,7 +120,6 @@ export default async function DashboardPage() {
   const assignedShiftIds = new Set((myAssignments ?? []).map((a) => a.shift_id))
 
   // Get current week boundaries (Mon-Sun)
-  const now = new Date()
   const dayOfWeek = now.getDay() // 0=Sun, 6=Sat
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
   const monday = new Date(now)
