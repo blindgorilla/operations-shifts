@@ -20,6 +20,8 @@ export async function GET() {
     .order('created_at', { ascending: false })
     .limit(20)
 
+  console.log('[NOTIF DEBUG] GET employee_id:', user.id, 'notifications count:', notifications?.length, 'error:', JSON.stringify(error))
+
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   return NextResponse.json({ notifications: notifications ?? [] })
@@ -40,17 +42,22 @@ export async function PATCH(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
 
   if ('mark_all_read' in parsed.data) {
-    await admin
+    const { data, error } = await admin
       .from('notifications')
       .update({ read: true })
       .eq('employee_id', user.id)
       .eq('read', false)
+      .select()
+    console.log('[NOTIF DEBUG] PATCH id: mark_all_read result:', JSON.stringify(data), 'error:', JSON.stringify(error))
   } else {
-    await admin
+    const id = (parsed.data as { id: string }).id
+    const { data, error } = await admin
       .from('notifications')
       .update({ read: true })
-      .eq('id', (parsed.data as { id: string }).id)
+      .eq('id', id)
       .eq('employee_id', user.id)
+      .select()
+    console.log('[NOTIF DEBUG] PATCH id:', id, 'result:', JSON.stringify(data), 'error:', JSON.stringify(error))
   }
 
   return NextResponse.json({ success: true })
