@@ -11,7 +11,7 @@ interface Notification {
   title: string
   message: string
   link: string
-  read: boolean
+  is_read: boolean
   created_at: string
 }
 
@@ -22,7 +22,7 @@ export default function NotificationDropdown() {
   const [loading, setLoading] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  const unreadCount = notifications.filter(n => !n.read).length
+  const unreadCount = notifications.filter(n => !n.is_read).length
 
   async function fetchNotifications() {
     try {
@@ -76,7 +76,7 @@ export default function NotificationDropdown() {
       })
     } catch {}
     setNotifications(prev =>
-      prev.map(n => n.id === notification.id ? { ...n, read: true } : n)
+      prev.map(n => n.id === notification.id ? { ...n, is_read: true } : n)
     )
     setOpen(false)
     if (notification.link) {
@@ -85,7 +85,7 @@ export default function NotificationDropdown() {
   }
 
   async function handleMarkAllRead() {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
     await fetch('/api/notifications', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -137,10 +137,10 @@ export default function NotificationDropdown() {
               <button
                 key={n.id}
                 onClick={() => handleClickNotification(n)}
-                className={`w-full text-left px-4 py-3 border-b border-gray-50 last:border-0 transition-colors hover:bg-gray-50 ${!n.read ? 'bg-blue-50/50' : ''}`}
+                className={`w-full text-left px-4 py-3 border-b border-gray-50 last:border-0 transition-colors hover:bg-gray-50 ${!n.is_read ? 'bg-blue-50/50' : ''}`}
               >
                 <div className="flex items-start gap-2">
-                  {!n.read && (
+                  {!n.is_read && (
                     <span className="mt-1.5 w-2 h-2 rounded-full bg-blue-500 shrink-0" />
                   )}
                   <div className={`flex-1 min-w-0 ${n.read ? 'pl-4' : ''}`}>
