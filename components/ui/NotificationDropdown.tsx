@@ -67,19 +67,21 @@ export default function NotificationDropdown() {
   }
 
   async function handleClickNotification(notification: Notification) {
-    setOpen(false)
-    if (!notification.read) {
-      setNotifications(prev =>
-        prev.map(n => n.id === notification.id ? { ...n, read: true } : n)
-      )
+    try {
       await fetch('/api/notifications', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ id: notification.id }),
       })
+    } catch {}
+    setNotifications(prev =>
+      prev.map(n => n.id === notification.id ? { ...n, read: true } : n)
+    )
+    setOpen(false)
+    if (notification.link) {
+      router.push(notification.link)
     }
-    router.push(notification.link)
   }
 
   async function handleMarkAllRead() {
