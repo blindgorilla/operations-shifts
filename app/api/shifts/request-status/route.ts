@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { createNotification } from '@/lib/notifications'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
@@ -49,6 +50,23 @@ export async function PATCH(request: Request) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  if (status === 'open') {
+    try {
+      const { data: allEmployees } = await admin.from('employees').select('id').eq('role', 'employee')
+      for (const emp of allEmployees ?? []) {
+        await createNotification({
+          employeeId: emp.id,
+          type: 'window_opened',
+          title: 'Request window is now open',
+          message: 'New shifts are available for request. Go to your dashboard to browse and request shifts.',
+          link: '/dashboard',
+        })
+      }
+    } catch (notifError) {
+      console.error('Notification create failed:', notifError)
+    }
   }
 
   return NextResponse.json({ success: true })

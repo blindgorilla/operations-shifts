@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { sendApprovalEmail, sendDenialEmail } from '@/lib/email/send'
 import { validateShiftRequest } from '@/lib/rules/validateShiftRequest'
+import { createNotification } from '@/lib/notifications'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
@@ -151,6 +152,21 @@ export async function PATCH(
     })
   }
 
+  // Send in-app notification
+  try {
+    await createNotification({
+      employeeId: shiftRequest.employee_id,
+      type: action === 'approve' ? 'request_approved' : 'request_denied',
+      title: action === 'approve' ? 'Shift Request Approved' : 'Shift Request Denied',
+      message: action === 'approve'
+        ? `Your request for the ${enrichedRequest.shift?.shift_type} shift on ${enrichedRequest.shift?.date} has been approved.`
+        : `Your request for the ${enrichedRequest.shift?.shift_type} shift on ${enrichedRequest.shift?.date} has been denied.${manager_note ? ' Note: ' + manager_note : ''}`,
+      link: '/my-requests',
+    })
+  } catch (notifError) {
+    console.error('Notification create failed:', notifError)
+  }
+
   // Send email notification
   try {
     if (action === 'approve') {
@@ -159,7 +175,6 @@ export async function PATCH(
       await sendDenialEmail(enrichedRequest.employee, enrichedRequest.shift, manager_note)
     }
   } catch (emailError) {
-    // Don't fail the whole request if email fails
     console.error('Email send failed:', emailError)
   }
 
