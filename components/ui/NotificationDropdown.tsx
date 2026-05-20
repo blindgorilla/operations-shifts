@@ -38,9 +38,9 @@ export default function NotificationDropdown() {
     fetchNotifications()
   }, [])
 
-  // Poll every 30s
+  // Poll every 60s
   useEffect(() => {
-    const interval = setInterval(fetchNotifications, 30000)
+    const interval = setInterval(fetchNotifications, 60000)
     return () => clearInterval(interval)
   }, [])
 
@@ -80,7 +80,7 @@ export default function NotificationDropdown() {
     )
     setOpen(false)
     if (notification.link) {
-      router.push(notification.link)
+      window.location.href = notification.link
     }
   }
 
