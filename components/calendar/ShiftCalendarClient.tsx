@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar'
 import { format, parse, startOfWeek, getDay, parseISO } from 'date-fns'
 import { enUS } from 'date-fns/locale/en-US'
@@ -24,6 +25,7 @@ interface ShiftCalendarClientProps {
   weeklyAssignedCount?: number
   weeklyRequired?: number
   employeeCoverage?: { id: string; name: string; assigned: number; required: number }[]
+  allEmployees?: { id: string; name: string }[]
 }
 
 const SHIFT_COLORS: Record<string, string> = {
@@ -66,7 +68,9 @@ export default function ShiftCalendarClient({
   weeklyAssignedCount,
   weeklyRequired = 5,
   employeeCoverage,
+  allEmployees = [],
 }: ShiftCalendarClientProps) {
+  const router = useRouter()
   const [view, setView] = useState<'list' | 'calendar'>(employee.role === 'manager' ? 'calendar' : 'list')
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null)
   const [requestedIds, setRequestedIds] = useState(new Set(requestedShiftIds))
@@ -76,6 +80,9 @@ export default function ShiftCalendarClient({
   const [pendingShiftId, setPendingShiftId] = useState<string | null>(null)
   const [pendingNote, setPendingNote] = useState<string>('')
   const [shiftFullMessage, setShiftFullMessage] = useState<boolean>(false)
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('')
+  const [assigning, setAssigning] = useState(false)
+  const [assignOverride, setAssignOverride] = useState(false)
 
   const events = shifts.map(s => shiftToEvent(s, employee.role === 'manager'))
 
@@ -118,6 +125,32 @@ export default function ShiftCalendarClient({
     showToast('success', 'Shift request submitted successfully')
     setSelectedShift(null)
   }, [])
+
+  const handleAssign = useCallback(async (shiftId: string, employeeId: string, override = false) => {
+    setAssigning(true)
+    const res = await fetch('/api/shifts/assign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shift_id: shiftId, employee_id: employeeId, override }),
+    })
+    const data = await res.json()
+    setAssigning(false)
+
+    if (!res.ok) {
+      if (res.status === 422 && data.error === 'shift_full') {
+        setAssignOverride(true)
+        return
+      }
+      showToast('error', data.error ?? 'Failed to assign employee')
+      return
+    }
+
+    showToast('success', 'Employee assigned successfully')
+    setSelectedShift(null)
+    setSelectedEmployeeId('')
+    setAssignOverride(false)
+    router.refresh()
+  }, [router])
 
   const CustomEvent = useCallback(({ event }: { event: CalEvent }) => {
     const employees = (event.resource as any).assigned_employees ?? []
@@ -209,7 +242,11 @@ export default function ShiftCalendarClient({
             style={{ height: '100%' }}
             eventPropGetter={eventStyleGetter}
             components={{ event: CustomEvent as any }}
-            onSelectEvent={(event: CalEvent) => setSelectedShift(event.resource)}
+            onSelectEvent={(event: CalEvent) => {
+              setSelectedShift(event.resource)
+              setSelectedEmployeeId('')
+              setAssignOverride(false)
+            }}
           />
         </div>
       ) : (
@@ -305,8 +342,8 @@ export default function ShiftCalendarClient({
         </div>
       )}
 
-      {/* Calendar shift modal */}
-      {selectedShift && view === 'calendar' && (
+      {/* Calendar shift modal — employee */}
+      {selectedShift && view === 'calendar' && employee.role !== 'manager' && (
         <div className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4" onClick={() => { setSelectedShift(null); setViolations([]) }}>
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start mb-4">
@@ -328,6 +365,112 @@ export default function ShiftCalendarClient({
           </div>
         </div>
       )}
+
+      {/* Calendar shift modal — manager assign */}
+      {selectedShift && view === 'calendar' && employee.role === 'manager' && (() => {
+        const shift = selectedShift as any
+        const assignmentCount = shift.assignment_count ?? 0
+        const headcount = shift.headcount ?? 1
+        const isFull = assignmentCount >= headcount
+        const assignedEmployees: string[] = shift.assigned_employees ?? []
+        const assignedIds: string[] = shift.assigned_employee_ids ?? []
+        const availableEmployees = allEmployees.filter(e => !assignedIds.includes(e.id))
+        return (
+          <div
+            className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4"
+            onClick={() => { setSelectedShift(null); setAssignOverride(false); setSelectedEmployeeId('') }}
+          >
+            <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+              <div className="flex justify-between items-start mb-4">
+                <h2 className="text-lg font-semibold">Shift Details</h2>
+                <button
+                  onClick={() => { setSelectedShift(null); setAssignOverride(false); setSelectedEmployeeId('') }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-2 mb-4">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-medium text-gray-700 w-20">Type</span>
+                  <span className="capitalize text-gray-900">{shift.shift_type}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-medium text-gray-700 w-20">Date</span>
+                  <span className="text-gray-900">{shift.date}</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-medium text-gray-700 w-20">Time</span>
+                  <span className="text-gray-900">{shift.start_time?.slice(0, 5)} – {shift.end_time?.slice(0, 5)}</span>
+                </div>
+                {shift.location && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="font-medium text-gray-700 w-20">Location</span>
+                    <span className="text-gray-900">{shift.location}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-medium text-gray-700 w-20">Coverage</span>
+                  <span className={`font-medium ${isFull ? 'text-green-700' : assignmentCount === 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                    {assignmentCount}/{headcount} spots filled
+                  </span>
+                </div>
+              </div>
+
+              {assignedEmployees.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Assigned</p>
+                  <ul className="space-y-1">
+                    {assignedEmployees.map((name, i) => (
+                      <li key={i} className="text-sm text-gray-800 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                        {name}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {availableEmployees.length > 0 && (
+                <div className="border-t border-gray-100 pt-4">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Assign Employee</p>
+                  {assignOverride && (
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                      This shift is at headcount. Assign anyway?
+                    </p>
+                  )}
+                  <div className="flex gap-2">
+                    <select
+                      value={selectedEmployeeId}
+                      onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                      className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#1B3A5C]"
+                    >
+                      <option value="">Select employee…</option>
+                      {availableEmployees.map(e => (
+                        <option key={e.id} value={e.id}>{e.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      disabled={!selectedEmployeeId || assigning}
+                      onClick={() => handleAssign(shift.id, selectedEmployeeId, assignOverride)}
+                      className="px-4 py-2 bg-[#1B3A5C] text-white text-sm font-medium rounded-lg hover:bg-[#16304e] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {assigning ? 'Assigning…' : assignOverride ? 'Assign Anyway' : 'Assign'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {availableEmployees.length === 0 && (
+                <p className="text-sm text-gray-500 border-t border-gray-100 pt-4">All employees are already assigned to this shift.</p>
+              )}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
