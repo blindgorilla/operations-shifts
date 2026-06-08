@@ -57,6 +57,7 @@ export interface SchedulingRule {
   display_name: string
   description: string
   severity: 'error' | 'warning'
+  is_hard?: boolean // DB column added in Phase 0; takes precedence over severity when present
   is_enabled: boolean
   parameters: Record<string, any>
   created_at: string
