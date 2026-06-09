@@ -12,7 +12,7 @@ export interface TimeOff {
   employee_id: string
   start_date: string // yyyy-MM-dd
   end_date: string   // yyyy-MM-dd
-  type: 'annual' | 'sick'
+  type: 'absent' | 'sick'
   status: 'pending' | 'approved'
 }
 
