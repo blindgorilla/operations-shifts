@@ -27,6 +27,8 @@ interface ShiftCalendarClientProps {
   weeklyRequired?: number
   employeeCoverage?: { id: string; name: string; assigned: number; required: number }[]
   allEmployees?: { id: string; name: string }[]
+  /** When true: calendar shows draft assignments read-only; no request/assign UI */
+  draftMode?: boolean
 }
 
 const SHIFT_COLORS: Record<string, string> = {
@@ -43,7 +45,7 @@ interface CalEvent {
   resource: Shift
 }
 
-function shiftToEvent(shift: Shift, isManager: boolean): CalEvent {
+function shiftToEvent(shift: Shift, isManager: boolean, isDraft?: boolean): CalEvent {
   const assignmentCount = (shift as any).assignment_count ?? 0
   const headcount = (shift as any).headcount ?? 1
   const [sh, sm] = shift.start_time.split(':').map(Number)
@@ -55,7 +57,7 @@ function shiftToEvent(shift: Shift, isManager: boolean): CalEvent {
   if (eh < sh || (eh === sh && em < sm)) end.setDate(end.getDate() + 1)
   const isFull = assignmentCount >= headcount
   const baseTitle = isManager
-    ? `${shift.shift_type} · ${assignmentCount}/${headcount}`
+    ? `${isDraft ? '[DRAFT] ' : ''}${shift.shift_type} · ${assignmentCount}/${headcount}`
     : `${shift.shift_type.charAt(0).toUpperCase() + shift.shift_type.slice(1)} ${shift.start_time.slice(0, 5)}`
   const title = (!isManager && isFull) ? `${baseTitle} · Full` : baseTitle
   return { id: shift.id, title, start, end, resource: shift }
@@ -70,6 +72,7 @@ export default function ShiftCalendarClient({
   weeklyRequired = 5,
   employeeCoverage,
   allEmployees = [],
+  draftMode = false,
 }: ShiftCalendarClientProps) {
   const router = useRouter()
   const [dashboardTab, setDashboardTab] = useState<'available' | 'schedule'>(
@@ -88,7 +91,7 @@ export default function ShiftCalendarClient({
   const [assigning, setAssigning] = useState(false)
   const [assignOverride, setAssignOverride] = useState(false)
 
-  const events = shifts.map(s => shiftToEvent(s, employee.role === 'manager'))
+  const events = shifts.map(s => shiftToEvent(s, employee.role === 'manager', draftMode))
 
   const assignedShifts = shifts.filter(s => assignedShiftIds.includes(s.id))
   const scheduleEvents = assignedShifts.map(s => {
@@ -191,7 +194,16 @@ export default function ShiftCalendarClient({
       const count = (event.resource as any).assignment_count ?? 0
       const total = (event.resource as any).headcount ?? 1
       const color = count === 0 ? '#ef4444' : count < total ? '#f59e0b' : '#16a34a'
-      return { style: { backgroundColor: color, borderRadius: '6px', border: 'none', color: '#fff', fontSize: '12px' } }
+      return {
+        style: {
+          backgroundColor: color,
+          borderRadius: '6px',
+          border: draftMode ? '2px dashed rgba(255,255,255,0.6)' : 'none',
+          opacity: draftMode ? 0.82 : 1,
+          color: '#fff',
+          fontSize: '12px',
+        },
+      }
     }
     const color = SHIFT_COLORS[event.resource.shift_type] ?? '#6b7280'
     const isAssigned = assignedShiftIds.includes(event.id)
@@ -553,7 +565,7 @@ export default function ShiftCalendarClient({
                 </div>
               )}
 
-              {availableEmployees.length > 0 && (
+              {!draftMode && availableEmployees.length > 0 && (
                 <div className="border-t border-gray-100 pt-4">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Assign Employee</p>
                   {assignOverride && (
@@ -583,8 +595,14 @@ export default function ShiftCalendarClient({
                 </div>
               )}
 
-              {availableEmployees.length === 0 && (
+              {!draftMode && availableEmployees.length === 0 && (
                 <p className="text-sm text-gray-500 border-t border-gray-100 pt-4">All employees are already assigned to this shift.</p>
+              )}
+
+              {draftMode && (
+                <p className="text-xs text-gray-400 border-t border-gray-100 pt-4 italic">
+                  Draft preview — read only. Publish the schedule to lock in assignments.
+                </p>
               )}
             </div>
           </div>
