@@ -68,6 +68,42 @@ function formatMonthDisplay(month: string): string {
   }
 }
 
+const DAY_TYPE_LABEL: Record<string, string> = {
+  weekday: 'Weekday',
+  friday: 'Friday',
+  weekend: 'Weekend',
+  holiday: 'Holiday',
+}
+const SHIFT_TYPE_LABEL_PLURAL: Record<string, string> = {
+  morning: 'Mornings',
+  evening: 'Evenings',
+  night: 'Nights',
+}
+const SHIFT_TYPE_LABEL_SINGULAR: Record<string, string> = {
+  morning: 'Morning',
+  evening: 'Evening',
+  night: 'Night',
+}
+
+interface SlotGroup {
+  key: string
+  label: string
+  dates: string[]
+}
+
+function groupUnfilledSlots(slots: UnfilledSlot[]): SlotGroup[] {
+  const groups: Record<string, SlotGroup> = {}
+  for (const slot of slots) {
+    const key = `${slot.day_type}|${slot.shift_type}`
+    if (!groups[key]) {
+      const dayLabel = DAY_TYPE_LABEL[slot.day_type] ?? slot.day_type
+      groups[key] = { key, label: dayLabel, dates: [] }
+    }
+    groups[key].dates.push(slot.date)
+  }
+  return Object.values(groups).sort((a, b) => b.dates.length - a.dates.length)
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -282,21 +318,30 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
                     All slots filled
                   </div>
                 ) : (
-                  <div className="space-y-1">
-                    {unfilledSlots.map((slot, i) => (
-                      <div key={i} className="flex items-center justify-between text-sm py-1 border-b border-gray-50 last:border-0">
-                        <span className="text-gray-700">
-                          {format(parseISO(slot.date), 'MMM d')}
-                        </span>
-                        <span className={`capitalize text-xs font-medium px-2 py-0.5 rounded-full ${
-                          slot.shift_type === 'morning' ? 'bg-amber-100 text-amber-700'
-                          : slot.shift_type === 'evening' ? 'bg-blue-100 text-blue-700'
-                          : 'bg-indigo-100 text-indigo-700'
-                        }`}>
-                          {slot.shift_type}
-                        </span>
-                      </div>
-                    ))}
+                  <div className="space-y-1.5">
+                    {groupUnfilledSlots(unfilledSlots).map((group) => {
+                      const [, shiftType] = group.key.split('|')
+                      const shiftChipClass =
+                        shiftType === 'morning' ? 'bg-amber-100 text-amber-700'
+                        : shiftType === 'evening' ? 'bg-blue-100 text-blue-700'
+                        : 'bg-indigo-100 text-indigo-700'
+                      const isPattern = group.dates.length > 1
+                      const shiftLabel = isPattern
+                        ? (SHIFT_TYPE_LABEL_PLURAL[shiftType] ?? shiftType)
+                        : (SHIFT_TYPE_LABEL_SINGULAR[shiftType] ?? shiftType)
+                      return (
+                        <div key={group.key} className="flex items-center justify-between text-sm py-1 border-b border-gray-50 last:border-0">
+                          <span className="text-gray-700">
+                            {isPattern
+                              ? `${group.label} ${shiftLabel} (${group.dates.length} dates)`
+                              : `${group.label} ${shiftLabel} — ${format(parseISO(group.dates[0]), 'MMM d')}`}
+                          </span>
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${shiftChipClass}`}>
+                            {shiftType}
+                          </span>
+                        </div>
+                      )
+                    })}
                     <p className="text-xs text-gray-400 pt-1">{unfilledSlots.length} slot{unfilledSlots.length !== 1 ? 's' : ''} could not be filled</p>
                   </div>
                 )}
