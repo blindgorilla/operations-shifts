@@ -19,9 +19,9 @@ import {
 // ---------------------------------------------------------------------------
 
 const SHIFT_TIMES = {
-  morning: { start: '07:00', end: '15:00' },
-  evening: { start: '15:00', end: '23:00' },
-  night:   { start: '23:00', end: '07:00' },
+  morning: { start: '09:00', end: '17:00' },
+  evening: { start: '17:00', end: '01:00' },
+  night:   { start: '01:00', end: '09:00' },
 } as const
 
 function makeShift(date: string, shiftType: 'morning' | 'evening' | 'night'): Shift {

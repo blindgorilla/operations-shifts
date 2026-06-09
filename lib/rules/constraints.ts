@@ -114,15 +114,23 @@ export function checkNightFollowup(
   if (requestedShift.shift_type !== 'morning' && requestedShift.shift_type !== 'evening') {
     return null
   }
+  // Use absolute datetimes so the check is correct regardless of shift times.
+  // Night shifts that start at 01:00 and end at 09:00 are entirely within one
+  // calendar day, so calendar-day "+1" arithmetic would wrongly block the next
+  // day's morning/evening (which have 32h/24h rest and should be allowed).
+  const requestedStart = getShiftStartDatetime(requestedShift)
+  const minRestHours: number = rule.parameters?.min_rest_hours ?? 12
   const prevNight = existingAssignments.find((a) => {
     if (a.shift.shift_type !== 'night') return false
-    return format(addDays(parseISO(a.shift.date), 1), 'yyyy-MM-dd') === requestedShift.date
+    const nightEnd = getShiftEndDatetime(a.shift)
+    const gapHours = differenceInHours(requestedStart, nightEnd)
+    return gapHours >= 0 && gapHours < minRestHours
   })
   if (!prevNight) return null
   return {
     rule: rule.name,
     severity: effectiveSeverity(rule),
-    message: `You worked a night shift on ${format(parseISO(prevNight.shift.date), 'dd MMM')}. Morning and evening shifts are not allowed the following day.`,
+    message: `You worked a night shift on ${format(parseISO(prevNight.shift.date), 'dd MMM')}. Morning and evening shifts are not allowed within ${minRestHours} hours of a night shift ending.`,
   }
 }
 
