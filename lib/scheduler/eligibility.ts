@@ -147,6 +147,40 @@ export function isEligible(
     if (checkConsecutiveNightsRest(nightRule, existingAws, requestedDate)?.severity === 'error') return false
   }
 
+  // 5b. Prospective consecutive-night pair checks.
+  //
+  // checkConsecutiveNightsRest only looks backward: "does requestedDate fall in the
+  // rest window of an already-established consecutive pair?" It does NOT detect cases
+  // where assigning a night on D would FORM a new pair with an existing night on D±1
+  // and that pair's rest window (D+2/D+3 for forward; D+1/D+2 for backward) conflicts
+  // with assignments already in the schedule.
+  //
+  // This matters when slots are filled in priority order rather than date order:
+  //   - Weekend nights (priority 10) are filled before friday nights (20) and weekday
+  //     nights (30), so a rest-window conflict can be created without a same-pass check.
+  //   - The repair pass can introduce the same issue through sequential swaps.
+  //
+  // Forward: assigning night on D, existing night on D+1 → pair ends on D+1 → rest
+  //          days D+2 and D+3 must be clear.
+  // Backward: assigning night on D, existing night on D-1 → pair ends on D → rest
+  //           days D+1 and D+2 must be clear.
+  if (slot.shift_type === 'night') {
+    const nextDayStr = format(addDays(requestedDate, 1), 'yyyy-MM-dd')
+    const prevDayStr = format(addDays(requestedDate, -1), 'yyyy-MM-dd')
+
+    if (employeeAssignments.some(a => a.date === nextDayStr && a.shift_type === 'night')) {
+      const r1 = format(addDays(requestedDate, 2), 'yyyy-MM-dd')
+      const r2 = format(addDays(requestedDate, 3), 'yyyy-MM-dd')
+      if (employeeAssignments.some(a => a.date === r1 || a.date === r2)) return false
+    }
+
+    if (employeeAssignments.some(a => a.date === prevDayStr && a.shift_type === 'night')) {
+      const r1 = format(addDays(requestedDate, 1), 'yyyy-MM-dd')
+      const r2 = format(addDays(requestedDate, 2), 'yyyy-MM-dd')
+      if (employeeAssignments.some(a => a.date === r1 || a.date === r2)) return false
+    }
+  }
+
   // 6. Max consecutive days
   const consRule = findRule('consecutive_days')
   if (consRule) {

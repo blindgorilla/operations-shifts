@@ -3,13 +3,25 @@
  * Run with: npx tsx lib/scheduler/dryRun.ts
  *
  * Uses 9 employees, July 2026, the confirmed coverage table, and two
- * time-off ranges. Prints the full schedule, fairness summary, and any
- * unfilled slots — no database access.
+ * time-off ranges. Prints the full schedule, fairness summary, unfilled
+ * slots, and a hard-constraint verification report.
  */
 
-import type { Employee, SchedulingRule } from '@/types'
-import type { CoverageRequirement, TimeOff } from './types'
+import { parseISO, getDay, addDays, format } from 'date-fns'
+import type { Employee, Shift, SchedulingRule } from '@/types'
+import type { CoverageRequirement, TimeOff, GeneratedAssignment } from './types'
 import { generateSchedule } from './generateSchedule'
+import {
+  getShiftStartDatetime,
+  getShiftEndDatetime,
+  checkMinRest,
+  checkNightFollowup,
+  checkConsecutiveNightsRest,
+  checkNewEmployeePairing,
+  checkConsecutiveDays,
+  type AssignmentWithShift,
+  type AssignmentWithEmployee,
+} from '../rules/constraints'
 
 // ---------------------------------------------------------------------------
 // Sample employees (9 guards, 2 marked as new)
@@ -106,6 +118,196 @@ const RULES: SchedulingRule[] = [
     parameters: { weight: 3 }, created_at: '', updated_at: '',
   },
 ]
+
+// ---------------------------------------------------------------------------
+// Hard-constraint verifier
+// Re-runs every assignment through the same predicates used by the eligibility
+// filter and collects every violation whose severity is 'error'.
+// ---------------------------------------------------------------------------
+
+const VERIFY_SHIFT_TIMES = {
+  morning: { start: '07:00', end: '15:00' },
+  evening: { start: '15:00', end: '23:00' },
+  night:   { start: '23:00', end: '07:00' },
+} as const
+
+function verifyShift(date: string, shiftType: 'morning' | 'evening' | 'night'): Shift {
+  const t = VERIFY_SHIFT_TIMES[shiftType]
+  return {
+    id: `${date}-${shiftType}`,
+    date,
+    shift_type: shiftType,
+    start_time: t.start,
+    end_time: t.end,
+    headcount: 1,
+    location: null,
+    role_required: null,
+    notes: null,
+    is_published: false,
+    created_by: null,
+    created_at: date,
+    updated_at: date,
+    request_status: 'open',
+  }
+}
+
+function toAws(a: GeneratedAssignment): AssignmentWithShift {
+  const shift = verifyShift(a.date, a.shift_type)
+  return {
+    id: `v-${a.employee_id}-${a.date}-${a.shift_type}`,
+    employee_id: a.employee_id,
+    shift_id: shift.id,
+    assigned_by: null,
+    created_at: a.date,
+    shift,
+  }
+}
+
+function toAwe(a: GeneratedAssignment, emp: Employee): AssignmentWithEmployee {
+  return {
+    id: `v-${a.employee_id}-${a.date}-${a.shift_type}`,
+    employee_id: a.employee_id,
+    shift_id: `${a.date}-${a.shift_type}`,
+    assigned_by: null,
+    created_at: a.date,
+    employee: emp,
+  }
+}
+
+interface HardViolation {
+  rule: string
+  employee: string
+  date: string
+  shiftType: string
+  message: string
+}
+
+function verifySchedule(
+  assignments: GeneratedAssignment[],
+  employees: Employee[],
+  timeOff: TimeOff[],
+  rules: SchedulingRule[],
+): HardViolation[] {
+  const violations: HardViolation[] = []
+  const findRule = (name: string) => rules.find(r => r.name === name)
+
+  const minRestRule = findRule('min_rest') ?? {
+    id: 'default', name: 'min_rest', display_name: 'Min Rest', description: '',
+    severity: 'error' as const, is_hard: true, is_enabled: true,
+    parameters: { min_rest_hours: 12 }, created_at: '', updated_at: '',
+  }
+  const nightRule   = findRule('night_followup')
+  const consRule    = findRule('consecutive_days')
+  const pairingRule = findRule('new_employee_pairing')
+
+  // Build a lookup: employee_id → sorted assignments
+  const byEmployee = new Map<string, GeneratedAssignment[]>()
+  for (const a of assignments) {
+    if (!byEmployee.has(a.employee_id)) byEmployee.set(a.employee_id, [])
+    byEmployee.get(a.employee_id)!.push(a)
+  }
+  for (const list of byEmployee.values()) list.sort((a, b) => a.date.localeCompare(b.date))
+
+  // Build a lookup: "date|shift_type" → GeneratedAssignment[] (all employees on that slot)
+  const bySlot = new Map<string, GeneratedAssignment[]>()
+  for (const a of assignments) {
+    const key = `${a.date}|${a.shift_type}`
+    if (!bySlot.has(key)) bySlot.set(key, [])
+    bySlot.get(key)!.push(a)
+  }
+
+  for (const [empId, empAssignments] of byEmployee.entries()) {
+    const employee = employees.find(e => e.id === empId)!
+    const priorAws: AssignmentWithShift[] = []
+
+    for (const a of empAssignments) {
+      const thisShift = verifyShift(a.date, a.shift_type)
+      const thisStart = getShiftStartDatetime(thisShift)
+      const thisEnd   = getShiftEndDatetime(thisShift)
+      const thisDate  = parseISO(a.date)
+      const dow       = getDay(thisDate)
+      const isFriday  = dow === 5
+      const isSaturday = dow === 6
+
+      const push = (rule: string, msg: string) =>
+        violations.push({ rule, employee: employee.name, date: a.date, shiftType: a.shift_type, message: msg })
+
+      // ── 1. Time-off conflict ──────────────────────────────────────────────
+      const onLeave = timeOff
+        .filter(t => t.employee_id === empId && t.status === 'approved')
+        .some(t => a.date >= t.start_date && a.date <= t.end_date)
+      if (onLeave) {
+        push('time_off', `Assigned on approved leave day ${a.date}`)
+      }
+
+      // ── 2. Min rest (12 h) ────────────────────────────────────────────────
+      const restViolations = checkMinRest(minRestRule, priorAws, thisStart, thisEnd)
+      for (const v of restViolations) {
+        if (v.severity === 'error') push('min_rest', v.message)
+      }
+
+      // ── 3. Night follow-up: no AM/PM the day after any night ──────────────
+      if (nightRule) {
+        const vF = checkNightFollowup(nightRule, priorAws, thisShift)
+        if (vF?.severity === 'error') push('night_followup_am_pm', vF.message)
+
+        // ── 4. 2 days off after 2 consecutive nights ─────────────────────
+        const vC = checkConsecutiveNightsRest(nightRule, priorAws, thisDate)
+        if (vC?.severity === 'error') push('night_followup_consec', vC.message)
+      }
+
+      // ── 5. Max consecutive days ───────────────────────────────────────────
+      if (consRule) {
+        const vD = checkConsecutiveDays(consRule, employee, priorAws, thisDate)
+        if (vD?.severity === 'error') push('consecutive_days', vD.message)
+      }
+
+      // ── 6. 5-per-week hard cap ────────────────────────────────────────────
+      const weekDow = dow === 0 ? 6 : dow - 1 // days since Monday
+      const weekStart = format(addDays(thisDate, -weekDow), 'yyyy-MM-dd')
+      const weekEnd   = format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd')
+      const weekCount = empAssignments.filter(x => x.date >= weekStart && x.date <= weekEnd).length
+      if (weekCount > 5) {
+        push('five_per_week', `${weekCount} shifts in calendar week ${weekStart}–${weekEnd} (max 5)`)
+      }
+
+      // ── 7. Fri/Sat new-employee pairing ───────────────────────────────────
+      if (pairingRule && employee.is_new_employee && (isFriday || isSaturday)) {
+        const slotKey = `${a.date}|${a.shift_type}`
+        const coWorkers = (bySlot.get(slotKey) ?? []).filter(x => x.employee_id !== empId)
+        const coAwe: AssignmentWithEmployee[] = coWorkers.flatMap(x => {
+          const e = employees.find(emp => emp.id === x.employee_id)
+          return e ? [toAwe(x, e)] : []
+        })
+        const vP = checkNewEmployeePairing(pairingRule, employee, coAwe, isFriday, isSaturday)
+        if (vP?.severity === 'error') push('new_employee_pairing', vP.message)
+      }
+
+      priorAws.push(toAws(a))
+    }
+  }
+
+  // ── 8. Headcount never exceeded ────────────────────────────────────────────
+  // Each slot's required_headcount comes from COVERAGE; check via bySlot size.
+  // We compare against the original coverage table passed in.
+  for (const [key, slotAssignments] of bySlot.entries()) {
+    const [date, shiftType] = key.split('|')
+    const dayType = slotAssignments[0].day_type
+    const req = COVERAGE.find(c => c.shift_type === shiftType && c.day_type === dayType)
+    const limit = req?.required_headcount ?? Infinity
+    if (slotAssignments.length > limit) {
+      violations.push({
+        rule: 'headcount_exceeded',
+        employee: '(slot)',
+        date,
+        shiftType,
+        message: `${slotAssignments.length} employees assigned but headcount limit is ${limit}`,
+      })
+    }
+  }
+
+  return violations
+}
 
 // ---------------------------------------------------------------------------
 // Run and print
@@ -207,6 +409,32 @@ function run(): void {
   }
 
   console.log(`Total assignments: ${assignments.length}`)
+
+  // Hard-constraint verification
+  console.log('\n── HARD CONSTRAINT VERIFICATION ─────────────────────────────────────────────')
+  const hardViolations = verifySchedule(assignments, EMPLOYEES, TIME_OFF, RULES)
+
+  if (hardViolations.length === 0) {
+    console.log('PASS — 0 hard violations found.\n')
+  } else {
+    // Group by rule for the summary line
+    const byRule = new Map<string, HardViolation[]>()
+    for (const v of hardViolations) {
+      if (!byRule.has(v.rule)) byRule.set(v.rule, [])
+      byRule.get(v.rule)!.push(v)
+    }
+    const breakdown = [...byRule.entries()]
+      .map(([rule, vs]) => `${rule}: ${vs.length}`)
+      .join(', ')
+    console.log(`FAIL — ${hardViolations.length} hard violation(s) found. Breakdown: ${breakdown}`)
+    console.log()
+    for (const v of hardViolations) {
+      console.log(`  [${v.rule}] ${v.employee} | ${v.date} ${v.shiftType}`)
+      console.log(`    ${v.message}`)
+    }
+    console.log()
+  }
+
   console.log('='.repeat(80))
 }
 
