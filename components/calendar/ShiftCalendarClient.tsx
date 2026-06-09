@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import React, { useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar'
 import { format, parse, startOfWeek, getDay, parseISO } from 'date-fns'
@@ -27,6 +27,8 @@ interface ShiftCalendarClientProps {
   weeklyRequired?: number
   employeeCoverage?: { id: string; name: string; assigned: number; required: number }[]
   allEmployees?: { id: string; name: string }[]
+  /** When true: calendar shows draft assignments read-only; no request/assign UI */
+  draftMode?: boolean
 }
 
 const SHIFT_COLORS: Record<string, string> = {
@@ -43,7 +45,7 @@ interface CalEvent {
   resource: Shift
 }
 
-function shiftToEvent(shift: Shift, isManager: boolean): CalEvent {
+function shiftToEvent(shift: Shift, isManager: boolean, isDraft?: boolean): CalEvent {
   const assignmentCount = (shift as any).assignment_count ?? 0
   const headcount = (shift as any).headcount ?? 1
   const [sh, sm] = shift.start_time.split(':').map(Number)
@@ -55,7 +57,7 @@ function shiftToEvent(shift: Shift, isManager: boolean): CalEvent {
   if (eh < sh || (eh === sh && em < sm)) end.setDate(end.getDate() + 1)
   const isFull = assignmentCount >= headcount
   const baseTitle = isManager
-    ? `${shift.shift_type} · ${assignmentCount}/${headcount}`
+    ? `${isDraft ? '[DRAFT] ' : ''}${shift.shift_type} · ${assignmentCount}/${headcount}`
     : `${shift.shift_type.charAt(0).toUpperCase() + shift.shift_type.slice(1)} ${shift.start_time.slice(0, 5)}`
   const title = (!isManager && isFull) ? `${baseTitle} · Full` : baseTitle
   return { id: shift.id, title, start, end, resource: shift }
@@ -70,6 +72,7 @@ export default function ShiftCalendarClient({
   weeklyRequired = 5,
   employeeCoverage,
   allEmployees = [],
+  draftMode = false,
 }: ShiftCalendarClientProps) {
   const router = useRouter()
   const [dashboardTab, setDashboardTab] = useState<'available' | 'schedule'>(
@@ -88,7 +91,7 @@ export default function ShiftCalendarClient({
   const [assigning, setAssigning] = useState(false)
   const [assignOverride, setAssignOverride] = useState(false)
 
-  const events = shifts.map(s => shiftToEvent(s, employee.role === 'manager'))
+  const events = shifts.map(s => shiftToEvent(s, employee.role === 'manager', draftMode))
 
   const assignedShifts = shifts.filter(s => assignedShiftIds.includes(s.id))
   const scheduleEvents = assignedShifts.map(s => {
@@ -191,7 +194,16 @@ export default function ShiftCalendarClient({
       const count = (event.resource as any).assignment_count ?? 0
       const total = (event.resource as any).headcount ?? 1
       const color = count === 0 ? '#ef4444' : count < total ? '#f59e0b' : '#16a34a'
-      return { style: { backgroundColor: color, borderRadius: '6px', border: 'none', color: '#fff', fontSize: '12px' } }
+      return {
+        style: {
+          backgroundColor: color,
+          borderRadius: '6px',
+          border: draftMode ? '2px dashed rgba(255,255,255,0.6)' : 'none',
+          opacity: draftMode ? 0.82 : 1,
+          color: '#fff',
+          fontSize: '12px',
+        },
+      }
     }
     const color = SHIFT_COLORS[event.resource.shift_type] ?? '#6b7280'
     const isAssigned = assignedShiftIds.includes(event.id)
@@ -202,6 +214,68 @@ export default function ShiftCalendarClient({
     const bgColor = isAssigned ? '#16a34a' : isRequested ? '#7c3aed' : (isFull ? '#9ca3af' : color)
     return { style: { backgroundColor: bgColor, borderRadius: '6px', border: 'none', color: '#fff', fontSize: '12px' } }
   }, [employee.role, assignedShiftIds, requestedIds])
+
+  // ---------------------------------------------------------------------------
+  // Draft mode calendar helpers
+  // ---------------------------------------------------------------------------
+
+  // One synthetic event per calendar day — carries all shifts for that day in
+  // resource.shiftsForDay so DraftDayEvent can render them without extra fetches.
+  const draftDayEvents = useMemo(() => {
+    if (!draftMode) return []
+    const byDay: Record<string, Shift[]> = {}
+    for (const shift of shifts) {
+      if (!byDay[shift.date]) byDay[shift.date] = []
+      byDay[shift.date].push(shift)
+    }
+    const SHIFT_ORDER: Record<string, number> = { morning: 0, evening: 1, night: 2 }
+    return Object.entries(byDay).map(([date, dayShifts]) => {
+      const start = parseISO(date)
+      start.setHours(0, 0, 0, 0)
+      const end = new Date(start)
+      end.setHours(23, 59, 0, 0)
+      const sorted = [...dayShifts].sort(
+        (a, b) => (SHIFT_ORDER[a.shift_type] ?? 9) - (SHIFT_ORDER[b.shift_type] ?? 9)
+      )
+      return { id: `draft-day-${date}`, title: date, start, end, resource: { shiftsForDay: sorted } as any }
+    })
+  }, [draftMode, shifts])
+
+  // Make the rbc-event wrapper invisible; the DraftDayEvent content provides all styling.
+  const draftEventPropGetter = useCallback(() => ({
+    style: { backgroundColor: 'transparent', border: 'none', boxShadow: 'none', padding: 0, margin: '1px 0' } as React.CSSProperties,
+  }), [])
+
+  // Compact M/E/N rows rendered inside each day cell in draft mode.
+  const DraftDayEvent = useCallback(({ event }: { event: any }) => {
+    const shiftsForDay: Shift[] = event?.resource?.shiftsForDay ?? []
+    return (
+      <div className="flex flex-col gap-0.5 p-0.5">
+        {shiftsForDay.map((shift) => {
+          const count = (shift as any).assignment_count ?? 0
+          const headcount = (shift as any).headcount ?? 1
+          const bgColor = count === 0 ? '#ef4444' : count < headcount ? '#f59e0b' : '#16a34a'
+          const label = { morning: 'M', evening: 'E', night: 'N' }[shift.shift_type] ?? '?'
+          return (
+            <div
+              key={shift.id}
+              onClick={(e) => {
+                e.stopPropagation()
+                setSelectedShift(shift)
+                setSelectedEmployeeId('')
+                setAssignOverride(false)
+              }}
+              style={{ backgroundColor: bgColor }}
+              className="flex items-center justify-between text-white text-[10px] font-semibold px-1 py-0.5 rounded cursor-pointer hover:opacity-90 transition-opacity"
+            >
+              <span>{label}</span>
+              <span>{count}/{headcount}</span>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }, []) // setSelectedShift/setSelectedEmployeeId/setAssignOverride are stable state setters
 
   return (
     <div>
@@ -278,22 +352,26 @@ export default function ShiftCalendarClient({
       {/* Available Shifts view (existing UI) */}
       {(employee.role !== 'employee' || dashboardTab === 'available') && (
         <>
-      {/* View toggle */}
+      {/* View toggle — hidden in draft mode (calendar only) */}
       <div className="flex items-center gap-2 mb-4">
-        <button
-          onClick={() => setView('list')}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${view === 'list' ? 'bg-[#1B3A5C] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-        >
-          List
-        </button>
-        <button
-          onClick={() => setView('calendar')}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${view === 'calendar' ? 'bg-[#1B3A5C] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-        >
-          Calendar
-        </button>
+        {!draftMode && (
+          <>
+            <button
+              onClick={() => setView('list')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${view === 'list' ? 'bg-[#1B3A5C] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            >
+              List
+            </button>
+            <button
+              onClick={() => setView('calendar')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${view === 'calendar' ? 'bg-[#1B3A5C] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            >
+              Calendar
+            </button>
+          </>
+        )}
 
-        <div className="ml-4 flex items-center gap-3 text-xs text-gray-500">
+        <div className={`flex items-center gap-3 text-xs text-gray-500 ${!draftMode ? 'ml-4' : ''}`}>
           {employee.role === 'manager' ? (
             <>
               <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> Empty</span>
@@ -311,16 +389,35 @@ export default function ShiftCalendarClient({
         </div>
       </div>
 
-      {view === 'calendar' ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-4" style={{ height: 600 }}>
+      {(view === 'calendar' || draftMode) ? (
+        <div className={`bg-white rounded-xl border border-gray-200 p-4${draftMode ? ' rbc-draft' : ''}`} style={{ height: 600 }}>
+          {draftMode && (
+            <style>{`
+              .rbc-draft .rbc-event {
+                height: auto !important;
+                overflow: visible !important;
+                padding: 0 !important;
+                background: transparent !important;
+                border: none !important;
+                box-shadow: none !important;
+                cursor: default !important;
+              }
+              .rbc-draft .rbc-event-content {
+                height: auto !important;
+                overflow: visible !important;
+              }
+              .rbc-draft .rbc-event:focus { outline: none !important; }
+              .rbc-draft .rbc-show-more { display: none !important; }
+            `}</style>
+          )}
           <Calendar
             localizer={localizer}
-            events={events}
+            events={draftMode ? draftDayEvents : events}
             defaultView={Views.MONTH}
             style={{ height: '100%' }}
-            eventPropGetter={eventStyleGetter}
-            components={{ event: CustomEvent as any }}
-            onSelectEvent={(event: CalEvent) => {
+            eventPropGetter={draftMode ? draftEventPropGetter : eventStyleGetter}
+            components={draftMode ? { event: DraftDayEvent as any } : { event: CustomEvent as any }}
+            onSelectEvent={draftMode ? () => {} : (event: CalEvent) => {
               setSelectedShift(event.resource)
               setSelectedEmployeeId('')
               setAssignOverride(false)
@@ -553,7 +650,7 @@ export default function ShiftCalendarClient({
                 </div>
               )}
 
-              {availableEmployees.length > 0 && (
+              {!draftMode && availableEmployees.length > 0 && (
                 <div className="border-t border-gray-100 pt-4">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Assign Employee</p>
                   {assignOverride && (
@@ -583,8 +680,14 @@ export default function ShiftCalendarClient({
                 </div>
               )}
 
-              {availableEmployees.length === 0 && (
+              {!draftMode && availableEmployees.length === 0 && (
                 <p className="text-sm text-gray-500 border-t border-gray-100 pt-4">All employees are already assigned to this shift.</p>
+              )}
+
+              {draftMode && (
+                <p className="text-xs text-gray-400 border-t border-gray-100 pt-4 italic">
+                  Draft preview — read only. Publish the schedule to lock in assignments.
+                </p>
               )}
             </div>
           </div>

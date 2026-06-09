@@ -38,6 +38,7 @@ export default function NavBar({ employee, pendingCount: initialCount = 0 }: Nav
 
   const managerLinks: NavLink[] = [
     { href: '/manager/shifts', label: 'Shifts' },
+    { href: '/manager/schedule', label: 'Schedule' },
     { href: '/manager/requests', label: 'Requests', badge: pendingCount },
     { href: '/manager/employees', label: 'Employees' },
     { href: '/manager/holidays', label: 'Holidays' },

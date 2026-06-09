@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { format, getDaysInMonth, addDays, parseISO, getDay } from 'date-fns'
 import { generateSchedule } from '@/lib/scheduler/generateSchedule'
+import { emptyCounters } from '@/lib/scheduler/counters'
 import type { CoverageRequirement, TimeOff, FairnessSummary, EmployeeFairnessCounters } from '@/lib/scheduler/types'
 import type { Employee, SchedulingRule } from '@/types'
 
@@ -46,9 +47,6 @@ function monthBounds(month: string): { periodStart: string; periodEnd: string } 
   }
 }
 
-function emptyCounters(): EmployeeFairnessCounters {
-  return { totalShifts: 0, weekendShifts: 0, holidayShifts: 0, nightShifts: 0, recentDates: [] }
-}
 
 // ---------------------------------------------------------------------------
 // POST /api/schedule/generate
