@@ -9,6 +9,7 @@ export interface Employee {
   email: string
   role: UserRole
   is_new_employee: boolean
+  is_active: boolean
   employment_start_date: string | null
   weekly_days: 4 | 5
   created_at: string

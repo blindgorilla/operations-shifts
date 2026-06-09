@@ -9,6 +9,7 @@ import InfoTooltip from '@/components/ui/InfoTooltip'
 export const dynamic = 'force-dynamic'
 
 export default async function ManagerShiftsPage() {
+  redirect('/manager/schedule')
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')

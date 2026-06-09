@@ -18,6 +18,7 @@ export default async function MyRequestsPage() {
 
   const { data: employee } = await supabase.from('employees').select('*').eq('id', user.id).single()
   if (!employee) redirect('/auth/login')
+  if (employee.role === 'manager') redirect('/manager/schedule')
 
   const { data: rawRequests } = await supabase
     .from('shift_requests')
