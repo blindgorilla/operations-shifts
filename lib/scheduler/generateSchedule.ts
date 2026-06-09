@@ -11,6 +11,7 @@ import type {
 import { buildSlots } from './buildSlots'
 import { isEligible } from './eligibility'
 import { scoreCandidate, updateCounters, revertCounters, globalPenalty } from './scoring'
+import { emptyCounters } from './counters'
 
 // ---------------------------------------------------------------------------
 // Slot ordering: hardest-to-fill first
@@ -70,10 +71,6 @@ function buildReason(
   if (slot.day_type === 'holiday') parts.push(`${c.holidayShifts} holiday shifts`)
   parts.push(`${c.totalShifts} total shifts`)
   return `lowest imbalance score (${parts.join(', ')})`
-}
-
-function emptyCounters(): EmployeeFairnessCounters {
-  return { totalShifts: 0, weekendShifts: 0, holidayShifts: 0, nightShifts: 0, recentDates: [] }
 }
 
 function deepCopyCounters(counters: FairnessSummary): FairnessSummary {

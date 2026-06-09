@@ -33,9 +33,11 @@ export interface GeneratedAssignment {
 
 export interface EmployeeFairnessCounters {
   totalShifts: number
+  morningShifts: number
+  eveningShifts: number
+  nightShifts: number
   weekendShifts: number
   holidayShifts: number
-  nightShifts: number
   /** Sorted yyyy-MM-dd dates in the current month — used for 5-on/2-off tracking */
   recentDates: string[]
 }

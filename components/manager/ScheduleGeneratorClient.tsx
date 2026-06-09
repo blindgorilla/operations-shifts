@@ -11,9 +11,11 @@ import type { Employee } from '@/types'
 
 interface EmployeeFairnessCounters {
   totalShifts: number
+  morningShifts: number
+  eveningShifts: number
+  nightShifts: number
   weekendShifts: number
   holidayShifts: number
-  nightShifts: number
   recentDates: string[]
 }
 
@@ -107,6 +109,121 @@ function groupUnfilledSlots(slots: UnfilledSlot[]): SlotGroup[] {
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// FairnessPanel — guard workload breakdown with imbalance highlighting
+// ---------------------------------------------------------------------------
+
+interface ColStats { min: number; max: number }
+
+function colStats(entries: [string, EmployeeFairnessCounters][], fn: (c: EmployeeFairnessCounters) => number): ColStats {
+  const vals = entries.map(([, c]) => fn(c))
+  return { min: Math.min(...vals), max: Math.max(...vals) }
+}
+
+function FairnessPanel({
+  fairnessSummary,
+  employeeMap,
+}: {
+  fairnessSummary: Record<string, EmployeeFairnessCounters>
+  employeeMap: Record<string, string>
+}) {
+  const entries = Object.entries(fairnessSummary).sort(([, a], [, b]) => b.totalShifts - a.totalShifts)
+
+  const stats = {
+    night:   colStats(entries, c => c.nightShifts ?? 0),
+    weekend: colStats(entries, c => c.weekendShifts ?? 0),
+    holiday: colStats(entries, c => c.holidayShifts ?? 0),
+  }
+
+  // Hide the Holiday column when every guard has 0 holiday shifts
+  const showHoliday = stats.holiday.max > 0
+
+  // Amber highlight only for Night / Weekend / Holiday max cells
+  function cellClass(val: number, stat: ColStats): string {
+    if (stat.max > stat.min && val === stat.max) {
+      return 'bg-amber-50 text-amber-800 font-semibold rounded'
+    }
+    return 'text-gray-500'
+  }
+
+  // Spread caption for Night / Weekend / Holiday where there is actual spread
+  const spreadParts: string[] = []
+  if (stats.night.max > stats.night.min)     spreadParts.push(`Night: ${stats.night.min}–${stats.night.max}`)
+  if (stats.weekend.max > stats.weekend.min) spreadParts.push(`Weekend: ${stats.weekend.min}–${stats.weekend.max}`)
+  if (showHoliday && stats.holiday.max > stats.holiday.min) spreadParts.push(`Holiday: ${stats.holiday.min}–${stats.holiday.max}`)
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Guard Fairness</p>
+      <div className="overflow-x-auto -mx-1">
+        <table className="w-full text-xs border-separate border-spacing-0">
+          <thead>
+            {/* Group label row */}
+            <tr className="text-gray-400">
+              <th className="text-left px-1 pb-0 font-medium" rowSpan={2} style={{ verticalAlign: 'bottom' }}>
+                Guard
+              </th>
+              <th className="text-center px-1 pb-0 font-medium" rowSpan={2} style={{ verticalAlign: 'bottom' }}>
+                Total
+              </th>
+              <th
+                colSpan={3}
+                className="text-center px-1 pt-1 pb-0 font-medium text-gray-300 text-[10px] uppercase tracking-wider border-b border-gray-100"
+              >
+                Shift type
+              </th>
+              <th
+                colSpan={showHoliday ? 2 : 1}
+                className="text-center px-1 pt-1 pb-0 font-medium text-gray-300 text-[10px] uppercase tracking-wider border-b border-gray-100"
+              >
+                Day type
+              </th>
+            </tr>
+            {/* Column label row */}
+            <tr className="text-gray-400 border-b border-gray-100">
+              <th className="text-right py-1 px-1 font-medium">M</th>
+              <th className="text-right py-1 px-1 font-medium">E</th>
+              <th className="text-right py-1 px-1 font-medium">N</th>
+              <th className="text-right py-1 px-1 font-medium">Wknd</th>
+              {showHoliday && <th className="text-right py-1 px-1 font-medium">Hol</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {entries.map(([empId, c]) => (
+              <tr key={empId} className="hover:bg-gray-50">
+                <td className="py-1.5 px-1 text-gray-800 font-medium truncate max-w-[80px]">
+                  {employeeMap[empId] ?? empId.slice(0, 8)}
+                </td>
+                <td className="py-1.5 px-1 text-right text-gray-700 font-medium">{c.totalShifts}</td>
+                {/* Shift type — plain, no highlight */}
+                <td className="py-1.5 px-1 text-right text-gray-400">{c.morningShifts ?? 0}</td>
+                <td className="py-1.5 px-1 text-right text-gray-400">{c.eveningShifts ?? 0}</td>
+                <td className={`py-1.5 px-1 text-right ${cellClass(c.nightShifts ?? 0, stats.night)}`}>
+                  {c.nightShifts ?? 0}
+                </td>
+                {/* Day type — highlighted */}
+                <td className={`py-1.5 px-1 text-right ${cellClass(c.weekendShifts ?? 0, stats.weekend)}`}>
+                  {c.weekendShifts ?? 0}
+                </td>
+                {showHoliday && (
+                  <td className={`py-1.5 px-1 text-right ${cellClass(c.holidayShifts ?? 0, stats.holiday)}`}>
+                    {c.holidayShifts ?? 0}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {spreadParts.length > 0 && (
+        <p className="mt-2 text-[10px] text-gray-400 leading-snug">
+          Spread — {spreadParts.join(' · ')}
+        </p>
+      )}
+    </div>
+  )
+}
 
 export default function ScheduleGeneratorClient({ manager, employees }: Props) {
   const [month, setMonth] = useState<string>(getDefaultMonth)
@@ -349,37 +466,10 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
 
               {/* Per-guard fairness */}
               {fairnessSummary && Object.keys(fairnessSummary).length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 p-4">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Guard Fairness</p>
-                  <div className="overflow-x-auto -mx-1">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="text-gray-400 border-b border-gray-100">
-                          <th className="text-left py-1.5 px-1 font-medium">Guard</th>
-                          <th className="text-right py-1.5 px-1 font-medium">Total</th>
-                          <th className="text-right py-1.5 px-1 font-medium">Wknd</th>
-                          <th className="text-right py-1.5 px-1 font-medium">Hol</th>
-                          <th className="text-right py-1.5 px-1 font-medium">Night</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {Object.entries(fairnessSummary)
-                          .sort(([, a], [, b]) => b.totalShifts - a.totalShifts)
-                          .map(([empId, counters]) => (
-                            <tr key={empId} className="hover:bg-gray-50">
-                              <td className="py-1.5 px-1 text-gray-800 font-medium truncate max-w-[90px]">
-                                {employeeMap[empId] ?? empId.slice(0, 8)}
-                              </td>
-                              <td className="py-1.5 px-1 text-right text-gray-700">{counters.totalShifts}</td>
-                              <td className="py-1.5 px-1 text-right text-gray-500">{counters.weekendShifts}</td>
-                              <td className="py-1.5 px-1 text-right text-gray-500">{counters.holidayShifts}</td>
-                              <td className="py-1.5 px-1 text-right text-gray-500">{counters.nightShifts}</td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                <FairnessPanel
+                  fairnessSummary={fairnessSummary}
+                  employeeMap={employeeMap}
+                />
               )}
             </div>
           </div>

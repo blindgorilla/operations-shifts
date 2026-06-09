@@ -1,6 +1,7 @@
 import { parseISO, addDays, format } from 'date-fns'
 import type { Employee, SchedulingRule } from '@/types'
 import type { Slot, GeneratedAssignment, FairnessSummary, EmployeeFairnessCounters } from './types'
+import { emptyCounters } from './counters'
 
 // ---------------------------------------------------------------------------
 // Weights — can be overridden by rule.parameters.weight in the rules data.
@@ -31,9 +32,6 @@ function recentWorkDays(recentDates: string[], slotDate: string): number {
   return recentDates.filter(d => d >= windowStart && d < slotDate).length
 }
 
-function emptyCounters(): EmployeeFairnessCounters {
-  return { totalShifts: 0, weekendShifts: 0, holidayShifts: 0, nightShifts: 0, recentDates: [] }
-}
 
 // ---------------------------------------------------------------------------
 // scoreCandidate
@@ -110,9 +108,11 @@ export function updateCounters(
   if (!counters[employeeId]) counters[employeeId] = emptyCounters()
   const c = counters[employeeId]
   c.totalShifts++
+  if (slot.shift_type === 'morning') c.morningShifts++
+  if (slot.shift_type === 'evening') c.eveningShifts++
+  if (slot.shift_type === 'night') c.nightShifts++
   if (slot.day_type === 'weekend') c.weekendShifts++
   if (slot.day_type === 'holiday') c.holidayShifts++
-  if (slot.shift_type === 'night') c.nightShifts++
   // Keep recentDates sorted; cap at last 14 days to bound memory
   if (!c.recentDates.includes(slot.date)) {
     c.recentDates.push(slot.date)
@@ -129,9 +129,11 @@ export function revertCounters(
   if (!counters[employeeId]) return
   const c = counters[employeeId]
   c.totalShifts--
+  if (slot.shift_type === 'morning') c.morningShifts--
+  if (slot.shift_type === 'evening') c.eveningShifts--
+  if (slot.shift_type === 'night') c.nightShifts--
   if (slot.day_type === 'weekend') c.weekendShifts--
   if (slot.day_type === 'holiday') c.holidayShifts--
-  if (slot.shift_type === 'night') c.nightShifts--
   // Only remove the date if the employee has no other assignment on the same date
 }
 
