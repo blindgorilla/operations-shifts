@@ -111,11 +111,12 @@ export async function POST(request: Request) {
 
   // ── 2. Gather inputs (separate sequential queries — no FK joins) ───────────
 
-  // 2a. Active employees
+  // 2a. Active non-manager employees (managers must never be scheduled as guards)
   const { data: rawEmployees, error: empError } = await admin
     .from('employees')
     .select('id, name, email, role, employment_start_date, weekly_days, is_new_employee, created_at, updated_at')
     .eq('is_active', true)
+    .eq('role', 'employee')
 
   if (empError || !rawEmployees || rawEmployees.length === 0) {
     return NextResponse.json({ error: 'No active employees found' }, { status: 422 })
