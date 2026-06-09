@@ -45,8 +45,20 @@ export async function GET(request: Request) {
 
   const run = runs?.[0] ?? null
 
+  // Also fetch the current published run for this month (for the Published badge)
+  const { data: publishedRuns } = await admin
+    .from('schedule_runs')
+    .select('id, generated_at')
+    .eq('period_start', periodStart)
+    .eq('period_end', periodEnd)
+    .eq('status', 'published')
+    .order('generated_at', { ascending: false })
+    .limit(1)
+
+  const publishedRun = publishedRuns?.[0] ?? null
+
   if (!run) {
-    return NextResponse.json({ run: null, shifts: [], assignments: [] })
+    return NextResponse.json({ run: null, shifts: [], assignments: [], published_run: publishedRun })
   }
 
   const { data: shifts } = await admin
@@ -77,5 +89,6 @@ export async function GET(request: Request) {
     run,
     shifts: shiftsWithCounts,
     assignments: assignments ?? [],
+    published_run: publishedRun,
   })
 }

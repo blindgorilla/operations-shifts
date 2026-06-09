@@ -42,6 +42,11 @@ interface DraftRun {
   parameters_snapshot: { unfilled_slots?: UnfilledSlot[]; month?: string } | null
 }
 
+interface PublishedRun {
+  id: string
+  generated_at: string
+}
+
 interface DraftState {
   run: DraftRun
   shifts: any[]
@@ -228,7 +233,10 @@ function FairnessPanel({
 export default function ScheduleGeneratorClient({ manager, employees }: Props) {
   const [month, setMonth] = useState<string>(getDefaultMonth)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isPublishing, setIsPublishing] = useState(false)
+  const [showPublishConfirm, setShowPublishConfirm] = useState(false)
   const [draftState, setDraftState] = useState<DraftState | null>(null)
+  const [publishedRun, setPublishedRun] = useState<PublishedRun | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   const employeeMap = useMemo(() => {
@@ -251,6 +259,7 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
         if (!res.ok || cancelled) return
         const data = await res.json()
         if (cancelled) return
+        setPublishedRun(data.published_run ?? null)
         if (data.run) {
           setDraftState({
             run: data.run,
@@ -305,6 +314,41 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
     }
   }
 
+  async function handlePublish() {
+    setShowPublishConfirm(false)
+    setIsPublishing(true)
+    try {
+      const res = await fetch('/api/schedule/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        showToast('error', data.error ?? 'Publish failed')
+        return
+      }
+      setPublishedRun({ id: data.run_id, generated_at: new Date().toISOString() })
+      // Reload draft state — the run is now published, so draft endpoint returns null run
+      const draftRes = await fetch(`/api/schedule/draft?month=${month}`)
+      if (draftRes.ok) {
+        const draftData = await draftRes.json()
+        setPublishedRun(draftData.published_run ?? null)
+        setDraftState(draftData.run ? {
+          run: draftData.run,
+          shifts: draftData.shifts,
+          assignments: draftData.assignments,
+          wasRegeneration: false,
+        } : null)
+      }
+      showToast('success', `${displayMonth} schedule published`)
+    } catch {
+      showToast('error', 'Network error — please try again')
+    } finally {
+      setIsPublishing(false)
+    }
+  }
+
   // Stitch assigned_employees + assigned_employee_ids onto each shift for the calendar
   const calShifts = useMemo(() => {
     if (!draftState) return []
@@ -334,6 +378,32 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
         </div>
       )}
 
+      {/* Publish confirmation modal */}
+      {showPublishConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
+            <h2 className="text-base font-semibold text-gray-900 mb-2">Publish schedule</h2>
+            <p className="text-sm text-gray-600 mb-5">
+              This publishes the <strong>{displayMonth}</strong> schedule and replaces any previously published version.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowPublishConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePublish}
+                className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
+              >
+                Publish
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Controls */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex flex-col sm:flex-row sm:items-end gap-4">
@@ -350,7 +420,7 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
           </div>
           <button
             onClick={handleGenerate}
-            disabled={isGenerating}
+            disabled={isGenerating || isPublishing}
             className="flex items-center gap-2 bg-[#1B3A5C] hover:bg-[#2a4a6b] disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
           >
             {isGenerating ? (
@@ -365,6 +435,26 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
               draftState ? `Regenerate ${displayMonth}` : `Generate ${displayMonth}`
             )}
           </button>
+
+          {draftState && (
+            <button
+              onClick={() => setShowPublishConfirm(true)}
+              disabled={isGenerating || isPublishing}
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
+            >
+              {isPublishing ? (
+                <>
+                  <svg className="animate-spin w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  Publishing…
+                </>
+              ) : (
+                'Publish schedule'
+              )}
+            </button>
+          )}
         </div>
 
         {/* Existing draft warning */}
@@ -384,11 +474,25 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
         )}
       </div>
 
+      {/* Published badge (shown even without a draft) */}
+      {publishedRun && !draftState && (
+        <div className="flex items-center gap-3">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-100 border border-green-300 text-green-800 text-xs font-semibold rounded-full uppercase tracking-wide">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+            Published
+          </span>
+          <span className="text-sm font-medium text-gray-700">{displayMonth}</span>
+          <span className="text-xs text-gray-500">
+            Published {format(parseISO(publishedRun.generated_at), 'MMM d, yyyy \'at\' HH:mm')}
+          </span>
+        </div>
+      )}
+
       {/* Draft view */}
       {draftState && (
         <>
           {/* Draft header banner */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap gap-y-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-100 border border-amber-300 text-amber-800 text-xs font-semibold rounded-full uppercase tracking-wide">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
               Draft
@@ -396,6 +500,12 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
             <span className="text-sm font-medium text-gray-700">{displayMonth}</span>
             {draftState.wasRegeneration && (
               <span className="text-xs text-gray-500 italic">Previous draft replaced</span>
+            )}
+            {publishedRun && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-green-100 border border-green-300 text-green-800 text-xs font-semibold rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                Published {format(parseISO(publishedRun.generated_at), 'MMM d')} — live
+              </span>
             )}
             <span className="ml-auto text-xs text-gray-400">Read-only preview — no changes published</span>
           </div>
