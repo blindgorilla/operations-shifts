@@ -112,7 +112,7 @@ export async function POST(request: Request) {
   // 2a. Active non-manager employees (managers must never be scheduled as guards)
   const { data: rawEmployees, error: empError } = await admin
     .from('employees')
-    .select('id, name, email, role, employment_start_date, weekly_days, is_new_employee, created_at, updated_at')
+    .select('id, name, email, role, employment_start_date, weekly_days, is_new_employee, is_active, created_at, updated_at')
     .eq('is_active', true)
     .eq('role', 'employee')
 
