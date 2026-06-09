@@ -91,11 +91,15 @@ const COVERAGE: CoverageRequirement[] = [
 ]
 
 const RULES: SchedulingRule[] = [
-  { id: 'r1', name: 'min_rest',            display_name: 'Min Rest (12h)',        description: '', severity: 'error',   is_hard: true,  is_enabled: true, parameters: { min_rest_hours: 12 },                   created_at: '', updated_at: '' },
-  { id: 'r2', name: 'night_followup',      display_name: 'Night Follow-up',       description: '', severity: 'error',   is_hard: true,  is_enabled: true, parameters: { rest_days_after_consecutive_nights: 2 }, created_at: '', updated_at: '' },
-  { id: 'r3', name: 'consecutive_days',    display_name: 'Max Consecutive Days',  description: '', severity: 'error',   is_hard: true,  is_enabled: true, parameters: { max_consecutive_days: 5 },               created_at: '', updated_at: '' },
-  { id: 'r4', name: 'new_employee_pairing',display_name: 'New Employee Pairing',  description: '', severity: 'warning', is_hard: false, is_enabled: true, parameters: {},                                       created_at: '', updated_at: '' },
-  { id: 'r5', name: 'fairness_info',       display_name: 'Fairness',              description: '', severity: 'warning', is_hard: false, is_enabled: true, parameters: { weight: 3 },                            created_at: '', updated_at: '' },
+  { id: 'r1', name: 'min_rest',               display_name: 'Min Rest (12h)',            description: '', severity: 'error',   is_hard: true,  is_enabled: true, parameters: { min_rest_hours: 12 }, created_at: '', updated_at: '' },
+  // night_followup: enabled but intentionally a no-op (covered by min_rest).
+  // Kept as a separate, independently-toggleable rule entry.
+  { id: 'r2', name: 'night_followup',         display_name: 'Single-Night Follow-up',    description: '', severity: 'error',   is_hard: true,  is_enabled: true, parameters: {}, created_at: '', updated_at: '' },
+  // consecutive_nights_rest: independently toggleable, strictly harder than min_rest.
+  { id: 'r6', name: 'consecutive_nights_rest',display_name: '2 Consecutive Nights Rest', description: '', severity: 'error',   is_hard: true,  is_enabled: true, parameters: {}, created_at: '', updated_at: '' },
+  { id: 'r3', name: 'consecutive_days',       display_name: 'Max Consecutive Days',      description: '', severity: 'error',   is_hard: true,  is_enabled: true, parameters: { max_consecutive_days: 5 }, created_at: '', updated_at: '' },
+  { id: 'r4', name: 'new_employee_pairing',   display_name: 'New Employee Pairing',      description: '', severity: 'warning', is_hard: false, is_enabled: true, parameters: {}, created_at: '', updated_at: '' },
+  { id: 'r5', name: 'fairness_info',          display_name: 'Fairness',                  description: '', severity: 'warning', is_hard: false, is_enabled: true, parameters: { weight: 3 }, created_at: '', updated_at: '' },
 ]
 
 /** Six months to rotate through so tests cover varied day-of-week starts. */
@@ -173,9 +177,9 @@ function buildRunInputs(seed: number): RunInputs {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SHIFT_TIMES = {
-  morning: { start: '07:00', end: '15:00' },
-  evening: { start: '15:00', end: '23:00' },
-  night:   { start: '23:00', end: '07:00' },
+  morning: { start: '09:00', end: '17:00' },
+  evening: { start: '17:00', end: '01:00' },
+  night:   { start: '01:00', end: '09:00' },
 } as const
 
 function makeVerifyShift(date: string, shiftType: 'morning' | 'evening' | 'night'): Shift {
@@ -216,10 +220,11 @@ export function verifySchedule(
   const violations: HardViolation[] = []
   const findRule = (name: string) => rules.find(r => r.name === name)
 
-  const minRestRule   = findRule('min_rest') ?? DEFAULT_MIN_REST_RULE
-  const nightRule     = findRule('night_followup')
-  const consRule      = findRule('consecutive_days')
-  const pairingRule   = findRule('new_employee_pairing')
+  const minRestRule      = findRule('min_rest') ?? DEFAULT_MIN_REST_RULE
+  const nightFollowupRule = findRule('night_followup')          // no-op rule, kept for independence
+  const consNightsRule   = findRule('consecutive_nights_rest')  // hard: 2 nights → 2 days off
+  const consRule         = findRule('consecutive_days')
+  const pairingRule      = findRule('new_employee_pairing')
 
   // employee_id → sorted assignments
   const byEmployee = new Map<string, GeneratedAssignment[]>()
@@ -264,14 +269,18 @@ export function verifySchedule(
         if (v.severity === 'error') push('min_rest', employee.name, a.date, a.shift_type, v.message)
       }
 
-      // 3. Night follow-up (a): no AM/PM day after a night
-      if (nightRule) {
-        const vF = checkNightFollowup(nightRule, priorAws, thisShift)
-        if (vF?.severity === 'error') push('night_followup_am_pm', employee.name, a.date, a.shift_type, vF.message)
+      // 3. Single-night follow-up — no-op rule (covered by min_rest); checked
+      //    independently so disabling it has no effect on rule 4 below.
+      if (nightFollowupRule) {
+        const vF = checkNightFollowup(nightFollowupRule, priorAws, thisShift)
+        if (vF?.severity === 'error') push('night_followup', employee.name, a.date, a.shift_type, vF.message)
+      }
 
-        // 4. Night follow-up (b): 2 days off after 2 consecutive nights
-        const vC = checkConsecutiveNightsRest(nightRule, priorAws, thisDate)
-        if (vC?.severity === 'error') push('night_followup_consec', employee.name, a.date, a.shift_type, vC.message)
+      // 4. Consecutive-nights rest — independently toggleable hard rule.
+      //    2 consecutive night shifts → 2 full days off. Stricter than min_rest.
+      if (consNightsRule) {
+        const vC = checkConsecutiveNightsRest(consNightsRule, priorAws, thisDate)
+        if (vC?.severity === 'error') push('consecutive_nights_rest', employee.name, a.date, a.shift_type, vC.message)
       }
 
       // 5. Max consecutive days
