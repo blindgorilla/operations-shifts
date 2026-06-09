@@ -65,15 +65,15 @@ function shuffle<T>(rng: () => number, arr: T[]): T[] {
 
 /** Base employee roster — new-employee flags are overridden per run. */
 const BASE_EMPLOYEES: Omit<Employee, 'is_new_employee'>[] = [
-  { id: 'e1', name: 'Alice Morgan',  email: 'alice@example.com',  role: 'employee', employment_start_date: '2022-01-10', weekly_days: 5, created_at: '', updated_at: '' },
-  { id: 'e2', name: 'Ben Clarke',    email: 'ben@example.com',    role: 'employee', employment_start_date: '2021-06-15', weekly_days: 5, created_at: '', updated_at: '' },
-  { id: 'e3', name: 'Cara Nguyen',   email: 'cara@example.com',   role: 'employee', employment_start_date: '2020-03-20', weekly_days: 5, created_at: '', updated_at: '' },
-  { id: 'e4', name: 'David Osei',    email: 'david@example.com',  role: 'employee', employment_start_date: '2023-02-01', weekly_days: 5, created_at: '', updated_at: '' },
-  { id: 'e5', name: 'Elena Petrov',  email: 'elena@example.com',  role: 'employee', employment_start_date: '2019-09-05', weekly_days: 5, created_at: '', updated_at: '' },
-  { id: 'e6', name: 'Farid Hassan',  email: 'farid@example.com',  role: 'employee', employment_start_date: '2022-11-12', weekly_days: 5, created_at: '', updated_at: '' },
-  { id: 'e7', name: 'Grace Kim',     email: 'grace@example.com',  role: 'employee', employment_start_date: '2023-07-30', weekly_days: 5, created_at: '', updated_at: '' },
-  { id: 'e8', name: 'Hiro Tanaka',   email: 'hiro@example.com',   role: 'employee', employment_start_date: '2026-04-01', weekly_days: 5, created_at: '', updated_at: '' },
-  { id: 'e9', name: 'Isla Brennan',  email: 'isla@example.com',   role: 'employee', employment_start_date: '2026-05-15', weekly_days: 5, created_at: '', updated_at: '' },
+  { id: 'e1', name: 'Alice Morgan',  email: 'alice@example.com',  role: 'employee', is_active: true, employment_start_date: '2022-01-10', weekly_days: 5, created_at: '', updated_at: '' },
+  { id: 'e2', name: 'Ben Clarke',    email: 'ben@example.com',    role: 'employee', is_active: true, employment_start_date: '2021-06-15', weekly_days: 5, created_at: '', updated_at: '' },
+  { id: 'e3', name: 'Cara Nguyen',   email: 'cara@example.com',   role: 'employee', is_active: true, employment_start_date: '2020-03-20', weekly_days: 5, created_at: '', updated_at: '' },
+  { id: 'e4', name: 'David Osei',    email: 'david@example.com',  role: 'employee', is_active: true, employment_start_date: '2023-02-01', weekly_days: 5, created_at: '', updated_at: '' },
+  { id: 'e5', name: 'Elena Petrov',  email: 'elena@example.com',  role: 'employee', is_active: true, employment_start_date: '2019-09-05', weekly_days: 5, created_at: '', updated_at: '' },
+  { id: 'e6', name: 'Farid Hassan',  email: 'farid@example.com',  role: 'employee', is_active: true, employment_start_date: '2022-11-12', weekly_days: 5, created_at: '', updated_at: '' },
+  { id: 'e7', name: 'Grace Kim',     email: 'grace@example.com',  role: 'employee', is_active: true, employment_start_date: '2023-07-30', weekly_days: 5, created_at: '', updated_at: '' },
+  { id: 'e8', name: 'Hiro Tanaka',   email: 'hiro@example.com',   role: 'employee', is_active: true, employment_start_date: '2026-04-01', weekly_days: 5, created_at: '', updated_at: '' },
+  { id: 'e9', name: 'Isla Brennan',  email: 'isla@example.com',   role: 'employee', is_active: true, employment_start_date: '2026-05-15', weekly_days: 5, created_at: '', updated_at: '' },
 ]
 
 /** Coverage requirements are fixed (Decisions §2 of auto-scheduler-plan.md). */
