@@ -140,44 +140,45 @@ export function isEligible(
   const restViolations = checkMinRest(minRestRule, existingAws, requestedStart, requestedEnd)
   if (restViolations.some(v => v.severity === 'error')) return false
 
-  // 5. Night follow-up: (a) no AM/PM the day after a night; (b) 2 days off after 2 consecutive nights
-  const nightRule = findRule('night_followup')
-  if (nightRule) {
-    if (checkNightFollowup(nightRule, existingAws, slotShift)?.severity === 'error') return false
-    if (checkConsecutiveNightsRest(nightRule, existingAws, requestedDate)?.severity === 'error') return false
+  // 5. Single-night follow-up — independently toggleable, currently a no-op.
+  // The 12h min_rest rule (step 4) already blocks every invalid post-night
+  // morning/evening with these shift times (gaps are 0h or 8h). Kept as a
+  // separate rule entry so it can be toggled without affecting step 5b.
+  const nightFollowupRule = findRule('night_followup')
+  if (nightFollowupRule) {
+    if (checkNightFollowup(nightFollowupRule, existingAws, slotShift)?.severity === 'error') return false
   }
 
-  // 5b. Prospective consecutive-night pair checks.
-  //
-  // checkConsecutiveNightsRest only looks backward: "does requestedDate fall in the
-  // rest window of an already-established consecutive pair?" It does NOT detect cases
-  // where assigning a night on D would FORM a new pair with an existing night on D±1
-  // and that pair's rest window (D+2/D+3 for forward; D+1/D+2 for backward) conflicts
-  // with assignments already in the schedule.
-  //
-  // This matters when slots are filled in priority order rather than date order:
-  //   - Weekend nights (priority 10) are filled before friday nights (20) and weekday
-  //     nights (30), so a rest-window conflict can be created without a same-pass check.
-  //   - The repair pass can introduce the same issue through sequential swaps.
-  //
-  // Forward: assigning night on D, existing night on D+1 → pair ends on D+1 → rest
-  //          days D+2 and D+3 must be clear.
-  // Backward: assigning night on D, existing night on D-1 → pair ends on D → rest
-  //           days D+1 and D+2 must be clear.
-  if (slot.shift_type === 'night') {
-    const nextDayStr = format(addDays(requestedDate, 1), 'yyyy-MM-dd')
-    const prevDayStr = format(addDays(requestedDate, -1), 'yyyy-MM-dd')
+  // 5b. Consecutive-nights rest — independently toggleable hard rule.
+  // Two parts: backward check (is this date in a prior pair's rest window?) and
+  // forward/backward prospective checks (would assigning a night on D create a
+  // new pair whose rest window conflicts with already-assigned days?).
+  const consNightsRule = findRule('consecutive_nights_rest')
+  if (consNightsRule) {
+    if (checkConsecutiveNightsRest(consNightsRule, existingAws, requestedDate)?.severity === 'error') return false
 
-    if (employeeAssignments.some(a => a.date === nextDayStr && a.shift_type === 'night')) {
-      const r1 = format(addDays(requestedDate, 2), 'yyyy-MM-dd')
-      const r2 = format(addDays(requestedDate, 3), 'yyyy-MM-dd')
-      if (employeeAssignments.some(a => a.date === r1 || a.date === r2)) return false
-    }
+    // Prospective pair checks: checkConsecutiveNightsRest only looks backward.
+    // If assigning a night on D would FORM a new pair with an existing night on
+    // D+1 or D-1, pre-emptively block the assignment when the resulting rest
+    // window (D+2/D+3 or D+1/D+2) conflicts with already-assigned days.
+    //
+    // Needed because slots fill in priority order (weekend nights before weekday
+    // nights), so a rest-window conflict can emerge without a same-pass check.
+    if (slot.shift_type === 'night') {
+      const nextDayStr = format(addDays(requestedDate, 1), 'yyyy-MM-dd')
+      const prevDayStr = format(addDays(requestedDate, -1), 'yyyy-MM-dd')
 
-    if (employeeAssignments.some(a => a.date === prevDayStr && a.shift_type === 'night')) {
-      const r1 = format(addDays(requestedDate, 1), 'yyyy-MM-dd')
-      const r2 = format(addDays(requestedDate, 2), 'yyyy-MM-dd')
-      if (employeeAssignments.some(a => a.date === r1 || a.date === r2)) return false
+      if (employeeAssignments.some(a => a.date === nextDayStr && a.shift_type === 'night')) {
+        const r1 = format(addDays(requestedDate, 2), 'yyyy-MM-dd')
+        const r2 = format(addDays(requestedDate, 3), 'yyyy-MM-dd')
+        if (employeeAssignments.some(a => a.date === r1 || a.date === r2)) return false
+      }
+
+      if (employeeAssignments.some(a => a.date === prevDayStr && a.shift_type === 'night')) {
+        const r1 = format(addDays(requestedDate, 1), 'yyyy-MM-dd')
+        const r2 = format(addDays(requestedDate, 2), 'yyyy-MM-dd')
+        if (employeeAssignments.some(a => a.date === r1 || a.date === r2)) return false
+      }
     }
   }
 

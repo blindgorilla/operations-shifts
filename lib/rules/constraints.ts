@@ -98,43 +98,31 @@ export function checkMinRest(
 }
 
 // ---------------------------------------------------------------------------
-// Rule: night_followup — layered hard rule (both parts share this rule name)
+// Rule: night_followup
 //
-// Part (a): no morning or evening the day after *any* night shift.
-// Part (b): after *2 consecutive* night shifts, 2 full days off (no shifts at all).
-//
-// Call checkNightFollowup for (a) and checkConsecutiveNightsRest for (b).
+// Intentionally a no-op. With shift times 09:00–17:00 / 17:00–01:00 /
+// 01:00–09:00, every same-day or cross-day pairing of night with morning or
+// evening produces a rest gap of 0h or 8h, both of which are already blocked
+// by the 12h min_rest rule. This function always returns null so the rule can
+// be toggled independently without affecting the consecutive-nights rule.
 // ---------------------------------------------------------------------------
 
 export function checkNightFollowup(
-  rule: SchedulingRule,
-  existingAssignments: AssignmentWithShift[],
-  requestedShift: Shift,
+  _rule: SchedulingRule,
+  _existingAssignments: AssignmentWithShift[],
+  _requestedShift: Shift,
 ): RuleViolation | null {
-  if (requestedShift.shift_type !== 'morning' && requestedShift.shift_type !== 'evening') {
-    return null
-  }
-  // Use absolute datetimes so the check is correct regardless of shift times.
-  // Night shifts that start at 01:00 and end at 09:00 are entirely within one
-  // calendar day, so calendar-day "+1" arithmetic would wrongly block the next
-  // day's morning/evening (which have 32h/24h rest and should be allowed).
-  const requestedStart = getShiftStartDatetime(requestedShift)
-  const minRestHours: number = rule.parameters?.min_rest_hours ?? 12
-  const prevNight = existingAssignments.find((a) => {
-    if (a.shift.shift_type !== 'night') return false
-    const nightEnd = getShiftEndDatetime(a.shift)
-    const gapHours = differenceInHours(requestedStart, nightEnd)
-    return gapHours >= 0 && gapHours < minRestHours
-  })
-  if (!prevNight) return null
-  return {
-    rule: rule.name,
-    severity: effectiveSeverity(rule),
-    message: `You worked a night shift on ${format(parseISO(prevNight.shift.date), 'dd MMM')}. Morning and evening shifts are not allowed within ${minRestHours} hours of a night shift ending.`,
-  }
+  return null
 }
 
-// Part (b): 2 full days off after 2 consecutive night shifts (blocks any shift type).
+// ---------------------------------------------------------------------------
+// Rule: consecutive_nights_rest (independently toggleable from night_followup)
+//
+// After 2 consecutive night shifts, 2 full days off are required before the
+// employee can work again. This is stricter than the 12h min_rest rule: the
+// rest days block shifts with 24h+ gaps that min_rest would allow.
+// ---------------------------------------------------------------------------
+
 export function checkConsecutiveNightsRest(
   rule: SchedulingRule,
   existingAssignments: AssignmentWithShift[],
