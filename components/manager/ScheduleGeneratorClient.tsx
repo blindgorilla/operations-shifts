@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { format, parseISO, addMonths } from 'date-fns'
 import ShiftCalendarClient from '@/components/calendar/ShiftCalendarClient'
-import type { Employee } from '@/types'
+import SlotPanel from '@/components/manager/SlotPanel'
+import type { Employee, Shift } from '@/types'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,13 +27,13 @@ interface UnfilledSlot {
   headcount: number
 }
 
-interface DraftAssignment {
+interface ScheduleAssignment {
   id: string
   employee_id: string
   shift_id: string
 }
 
-interface DraftRun {
+interface ScheduleRun {
   id: string
   period_start: string
   period_end: string
@@ -42,16 +43,11 @@ interface DraftRun {
   parameters_snapshot: { unfilled_slots?: UnfilledSlot[]; month?: string } | null
 }
 
-interface PublishedRun {
-  id: string
-  generated_at: string
-}
-
-interface DraftState {
-  run: DraftRun
+interface ScheduleState {
+  run: ScheduleRun
   shifts: any[]
-  assignments: DraftAssignment[]
-  wasRegeneration: boolean
+  assignments: ScheduleAssignment[]
+  wasRegeneration?: boolean
 }
 
 interface Props {
@@ -112,11 +108,7 @@ function groupUnfilledSlots(slots: UnfilledSlot[]): SlotGroup[] {
 }
 
 // ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// FairnessPanel — guard workload breakdown with imbalance highlighting
+// FairnessPanel
 // ---------------------------------------------------------------------------
 
 interface ColStats { min: number; max: number }
@@ -141,22 +133,17 @@ function FairnessPanel({
     holiday: colStats(entries, c => c.holidayShifts ?? 0),
   }
 
-  // Hide the Holiday column when every guard has 0 holiday shifts
   const showHoliday = stats.holiday.max > 0
 
-  // Amber highlight only for Night / Weekend / Holiday max cells
   function cellClass(val: number, stat: ColStats): string {
-    if (stat.max > stat.min && val === stat.max) {
-      return 'bg-amber-50 text-amber-800 font-semibold rounded'
-    }
+    if (stat.max > stat.min && val === stat.max) return 'bg-amber-50 text-amber-800 font-semibold rounded'
     return 'text-gray-500'
   }
 
-  // Spread caption for Night / Weekend / Holiday where there is actual spread
   const spreadParts: string[] = []
-  if (stats.night.max > stats.night.min)     spreadParts.push(`Night: ${stats.night.min}–${stats.night.max}`)
-  if (stats.weekend.max > stats.weekend.min) spreadParts.push(`Weekend: ${stats.weekend.min}–${stats.weekend.max}`)
-  if (showHoliday && stats.holiday.max > stats.holiday.min) spreadParts.push(`Holiday: ${stats.holiday.min}–${stats.holiday.max}`)
+  if (stats.night.max > stats.night.min)     spreadParts.push(`Night: ${stats.night.min}-${stats.night.max}`)
+  if (stats.weekend.max > stats.weekend.min) spreadParts.push(`Weekend: ${stats.weekend.min}-${stats.weekend.max}`)
+  if (showHoliday && stats.holiday.max > stats.holiday.min) spreadParts.push(`Holiday: ${stats.holiday.min}-${stats.holiday.max}`)
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -164,28 +151,12 @@ function FairnessPanel({
       <div className="overflow-x-auto -mx-1">
         <table className="w-full text-xs border-separate border-spacing-0">
           <thead>
-            {/* Group label row */}
             <tr className="text-gray-400">
-              <th className="text-left px-1 pb-0 font-medium" rowSpan={2} style={{ verticalAlign: 'bottom' }}>
-                Guard
-              </th>
-              <th className="text-center px-1 pb-0 font-medium" rowSpan={2} style={{ verticalAlign: 'bottom' }}>
-                Total
-              </th>
-              <th
-                colSpan={3}
-                className="text-center px-1 pt-1 pb-0 font-medium text-gray-300 text-[10px] uppercase tracking-wider border-b border-gray-100"
-              >
-                Shift type
-              </th>
-              <th
-                colSpan={showHoliday ? 2 : 1}
-                className="text-center px-1 pt-1 pb-0 font-medium text-gray-300 text-[10px] uppercase tracking-wider border-b border-gray-100"
-              >
-                Day type
-              </th>
+              <th className="text-left px-1 pb-0 font-medium" rowSpan={2} style={{ verticalAlign: 'bottom' }}>Guard</th>
+              <th className="text-center px-1 pb-0 font-medium" rowSpan={2} style={{ verticalAlign: 'bottom' }}>Total</th>
+              <th colSpan={3} className="text-center px-1 pt-1 pb-0 font-medium text-gray-300 text-[10px] uppercase tracking-wider border-b border-gray-100">Shift type</th>
+              <th colSpan={showHoliday ? 2 : 1} className="text-center px-1 pt-1 pb-0 font-medium text-gray-300 text-[10px] uppercase tracking-wider border-b border-gray-100">Day type</th>
             </tr>
-            {/* Column label row */}
             <tr className="text-gray-400 border-b border-gray-100">
               <th className="text-right py-1 px-1 font-medium">M</th>
               <th className="text-right py-1 px-1 font-medium">E</th>
@@ -197,24 +168,14 @@ function FairnessPanel({
           <tbody className="divide-y divide-gray-50">
             {entries.map(([empId, c]) => (
               <tr key={empId} className="hover:bg-gray-50">
-                <td className="py-1.5 px-1 text-gray-800 font-medium truncate max-w-[80px]">
-                  {employeeMap[empId] ?? empId.slice(0, 8)}
-                </td>
+                <td className="py-1.5 px-1 text-gray-800 font-medium truncate max-w-[80px]">{employeeMap[empId] ?? empId.slice(0, 8)}</td>
                 <td className="py-1.5 px-1 text-right text-gray-700 font-medium">{c.totalShifts}</td>
-                {/* Shift type — plain, no highlight */}
                 <td className="py-1.5 px-1 text-right text-gray-400">{c.morningShifts ?? 0}</td>
                 <td className="py-1.5 px-1 text-right text-gray-400">{c.eveningShifts ?? 0}</td>
-                <td className={`py-1.5 px-1 text-right ${cellClass(c.nightShifts ?? 0, stats.night)}`}>
-                  {c.nightShifts ?? 0}
-                </td>
-                {/* Day type — highlighted */}
-                <td className={`py-1.5 px-1 text-right ${cellClass(c.weekendShifts ?? 0, stats.weekend)}`}>
-                  {c.weekendShifts ?? 0}
-                </td>
+                <td className={`py-1.5 px-1 text-right ${cellClass(c.nightShifts ?? 0, stats.night)}`}>{c.nightShifts ?? 0}</td>
+                <td className={`py-1.5 px-1 text-right ${cellClass(c.weekendShifts ?? 0, stats.weekend)}`}>{c.weekendShifts ?? 0}</td>
                 {showHoliday && (
-                  <td className={`py-1.5 px-1 text-right ${cellClass(c.holidayShifts ?? 0, stats.holiday)}`}>
-                    {c.holidayShifts ?? 0}
-                  </td>
+                  <td className={`py-1.5 px-1 text-right ${cellClass(c.holidayShifts ?? 0, stats.holiday)}`}>{c.holidayShifts ?? 0}</td>
                 )}
               </tr>
             ))}
@@ -222,22 +183,95 @@ function FairnessPanel({
         </table>
       </div>
       {spreadParts.length > 0 && (
-        <p className="mt-2 text-[10px] text-gray-400 leading-snug">
-          Spread — {spreadParts.join(' · ')}
-        </p>
+        <p className="mt-2 text-[10px] text-gray-400 leading-snug">Spread -- {spreadParts.join(' - ')}</p>
       )}
     </div>
   )
 }
 
+// ---------------------------------------------------------------------------
+// SummaryPanel -- shared between draft and published views
+// ---------------------------------------------------------------------------
+
+function SummaryPanel({
+  assignmentCount,
+  unfilledSlots,
+  fairnessSummary,
+  employeeMap,
+  labelSuffix,
+}: {
+  assignmentCount: number
+  unfilledSlots: UnfilledSlot[]
+  fairnessSummary: Record<string, EmployeeFairnessCounters> | null
+  employeeMap: Record<string, string>
+  labelSuffix: string
+}) {
+  return (
+    <div className="w-full lg:w-80 shrink-0 space-y-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Total Assignments</p>
+        <p className="text-3xl font-bold text-[#1B3A5C]">{assignmentCount}</p>
+        <p className="text-xs text-gray-400 mt-0.5">shifts assigned {labelSuffix}</p>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Unfilled Slots</p>
+        {unfilledSlots.length === 0 ? (
+          <div className="flex items-center gap-1.5 text-green-700 text-sm font-medium">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            All slots filled
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {groupUnfilledSlots(unfilledSlots).map((group) => {
+              const [, shiftType] = group.key.split('|')
+              const shiftChipClass =
+                shiftType === 'morning' ? 'bg-amber-100 text-amber-700'
+                : shiftType === 'evening' ? 'bg-blue-100 text-blue-700'
+                : 'bg-indigo-100 text-indigo-700'
+              const isPattern = group.dates.length > 1
+              const shiftLabel = isPattern
+                ? (SHIFT_TYPE_LABEL_PLURAL[shiftType] ?? shiftType)
+                : (SHIFT_TYPE_LABEL_SINGULAR[shiftType] ?? shiftType)
+              return (
+                <div key={group.key} className="flex items-center justify-between text-sm py-1 border-b border-gray-50 last:border-0">
+                  <span className="text-gray-700">
+                    {isPattern
+                      ? `${group.label} ${shiftLabel} (${group.dates.length} dates)`
+                      : `${group.label} ${shiftLabel} -- ${format(parseISO(group.dates[0]), 'MMM d')}`}
+                  </span>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${shiftChipClass}`}>{shiftType}</span>
+                </div>
+              )
+            })}
+            <p className="text-xs text-gray-400 pt-1">{unfilledSlots.length} slot{unfilledSlots.length !== 1 ? 's' : ''} could not be filled</p>
+          </div>
+        )}
+      </div>
+
+      {fairnessSummary && Object.keys(fairnessSummary).length > 0 && (
+        <FairnessPanel fairnessSummary={fairnessSummary} employeeMap={employeeMap} />
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export default function ScheduleGeneratorClient({ manager, employees }: Props) {
   const [month, setMonth] = useState<string>(getDefaultMonth)
   const [isGenerating, setIsGenerating] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
+  const [isDownloadingPDF, setIsDownloadingPDF] = useState(false)
   const [showPublishConfirm, setShowPublishConfirm] = useState(false)
-  const [draftState, setDraftState] = useState<DraftState | null>(null)
-  const [publishedRun, setPublishedRun] = useState<PublishedRun | null>(null)
+  const [draftState, setDraftState] = useState<ScheduleState | null>(null)
+  const [publishedState, setPublishedState] = useState<ScheduleState | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [selectedDraftShift, setSelectedDraftShift] = useState<Shift | null>(null)
 
   const employeeMap = useMemo(() => {
     const map: Record<string, string> = {}
@@ -250,31 +284,67 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
     setTimeout(() => setToast(null), 4000)
   }, [])
 
-  // Fetch any existing draft when month changes
+  const handleDraftAssign = useCallback((shiftId: string, employeeId: string) => {
+    setDraftState(prev => {
+      if (!prev) return prev
+      const newAssignments = [
+        ...prev.assignments,
+        { id: `optimistic-${employeeId}-${shiftId}`, employee_id: employeeId, shift_id: shiftId },
+      ]
+      const newShifts = prev.shifts.map((s: any) =>
+        s.id === shiftId ? { ...s, assignment_count: (s.assignment_count ?? 0) + 1 } : s,
+      )
+      return { ...prev, assignments: newAssignments, shifts: newShifts }
+    })
+    setSelectedDraftShift(prev =>
+      prev?.id === shiftId
+        ? { ...prev, assignment_count: ((prev as any).assignment_count ?? 0) + 1 } as any
+        : prev,
+    )
+  }, [])
+
+  const handleDraftUnassign = useCallback((shiftId: string, employeeId: string) => {
+    setDraftState(prev => {
+      if (!prev) return prev
+      const newAssignments = prev.assignments.filter(
+        a => !(a.shift_id === shiftId && a.employee_id === employeeId),
+      )
+      const newShifts = prev.shifts.map((s: any) =>
+        s.id === shiftId ? { ...s, assignment_count: Math.max(0, (s.assignment_count ?? 0) - 1) } : s,
+      )
+      return { ...prev, assignments: newAssignments, shifts: newShifts }
+    })
+    setSelectedDraftShift(prev =>
+      prev?.id === shiftId
+        ? { ...prev, assignment_count: Math.max(0, ((prev as any).assignment_count ?? 1) - 1) } as any
+        : prev,
+    )
+  }, [])
+
   useEffect(() => {
     let cancelled = false
-    async function fetchExisting() {
+
+    async function fetchBoth() {
       try {
         const res = await fetch(`/api/schedule/draft?month=${month}`)
         if (!res.ok || cancelled) return
         const data = await res.json()
         if (cancelled) return
-        setPublishedRun(data.published_run ?? null)
-        if (data.run) {
-          setDraftState({
-            run: data.run,
-            shifts: data.shifts,
-            assignments: data.assignments,
-            wasRegeneration: false,
-          })
-        } else {
-          setDraftState(null)
-        }
-      } catch {
-        // silently ignore — user hasn't generated yet
-      }
+        setDraftState(data.run ? { run: data.run, shifts: data.shifts, assignments: data.assignments } : null)
+      } catch { /* silent */ }
+
+      if (cancelled) return
+
+      try {
+        const res = await fetch(`/api/schedule/published?month=${month}`)
+        if (!res.ok || cancelled) return
+        const data = await res.json()
+        if (cancelled) return
+        setPublishedState(data.run ? { run: data.run, shifts: data.shifts, assignments: data.assignments } : null)
+      } catch { /* silent */ }
     }
-    fetchExisting()
+
+    fetchBoth()
     return () => { cancelled = true }
   }, [month])
 
@@ -288,17 +358,10 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
         body: JSON.stringify({ month }),
       })
       const data = await res.json()
-      if (!res.ok) {
-        showToast('error', data.error ?? 'Generation failed')
-        return
-      }
+      if (!res.ok) { showToast('error', data.error ?? 'Generation failed'); return }
 
-      // Fetch the freshly created draft
       const draftRes = await fetch(`/api/schedule/draft?month=${month}`)
-      if (!draftRes.ok) {
-        showToast('error', 'Generated but failed to load draft')
-        return
-      }
+      if (!draftRes.ok) { showToast('error', 'Generated but failed to load draft'); return }
       const draftData = await draftRes.json()
       setDraftState({
         run: draftData.run,
@@ -308,7 +371,7 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
       })
       showToast('success', hadExistingDraft ? 'Draft replaced successfully' : 'Draft generated successfully')
     } catch {
-      showToast('error', 'Network error — please try again')
+      showToast('error', 'Network error -- please try again')
     } finally {
       setIsGenerating(false)
     }
@@ -324,61 +387,73 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
         body: JSON.stringify({ month }),
       })
       const data = await res.json()
-      if (!res.ok) {
-        showToast('error', data.error ?? 'Publish failed')
-        return
-      }
-      setPublishedRun({ id: data.run_id, generated_at: new Date().toISOString() })
-      // Reload draft state — the run is now published, so draft endpoint returns null run
-      const draftRes = await fetch(`/api/schedule/draft?month=${month}`)
+      if (!res.ok) { showToast('error', data.error ?? 'Publish failed'); return }
+
+      const [draftRes, pubRes] = await Promise.all([
+        fetch(`/api/schedule/draft?month=${month}`),
+        fetch(`/api/schedule/published?month=${month}`),
+      ])
       if (draftRes.ok) {
-        const draftData = await draftRes.json()
-        setPublishedRun(draftData.published_run ?? null)
-        setDraftState(draftData.run ? {
-          run: draftData.run,
-          shifts: draftData.shifts,
-          assignments: draftData.assignments,
-          wasRegeneration: false,
-        } : null)
+        const d = await draftRes.json()
+        setDraftState(d.run ? { run: d.run, shifts: d.shifts, assignments: d.assignments } : null)
+      }
+      if (pubRes.ok) {
+        const p = await pubRes.json()
+        setPublishedState(p.run ? { run: p.run, shifts: p.shifts, assignments: p.assignments } : null)
       }
       showToast('success', `${displayMonth} schedule published`)
     } catch {
-      showToast('error', 'Network error — please try again')
+      showToast('error', 'Network error -- please try again')
     } finally {
       setIsPublishing(false)
     }
   }
 
-  // Stitch assigned_employees + assigned_employee_ids onto each shift for the calendar
-  const calShifts = useMemo(() => {
-    if (!draftState) return []
-    const byShift: Record<string, DraftAssignment[]> = {}
-    for (const a of draftState.assignments) {
+  async function handleDownloadPDF() {
+    setIsDownloadingPDF(true)
+    try {
+      const res = await fetch(`/api/schedule/pdf?month=${month}`)
+      if (!res.ok) { showToast('error', 'PDF generation failed'); return }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `schedule-${month}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      showToast('error', 'Failed to download PDF')
+    } finally {
+      setIsDownloadingPDF(false)
+    }
+  }
+
+  function buildCalShifts(state: ScheduleState) {
+    const byShift: Record<string, ScheduleAssignment[]> = {}
+    for (const a of state.assignments) {
       if (!byShift[a.shift_id]) byShift[a.shift_id] = []
       byShift[a.shift_id].push(a)
     }
-    return draftState.shifts.map((s: any) => ({
+    return state.shifts.map((s: any) => ({
       ...s,
       assigned_employees: (byShift[s.id] ?? []).map(a => employeeMap[a.employee_id] ?? 'Unknown'),
       assigned_employee_ids: (byShift[s.id] ?? []).map(a => a.employee_id),
     }))
-  }, [draftState, employeeMap])
+  }
 
-  const fairnessSummary = draftState?.run?.fairness_summary ?? null
-  const unfilledSlots: UnfilledSlot[] = draftState?.run?.parameters_snapshot?.unfilled_slots ?? []
-  const assignmentCount = draftState?.assignments.length ?? 0
+  const draftCalShifts     = useMemo(() => draftState     ? buildCalShifts(draftState)     : [], [draftState, employeeMap])
+  const publishedCalShifts = useMemo(() => publishedState ? buildCalShifts(publishedState) : [], [publishedState, employeeMap])
+
   const displayMonth = formatMonthDisplay(month)
 
   return (
     <div className="space-y-6">
-      {/* Toast */}
       {toast && (
         <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium text-white transition-all ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
           {toast.message}
         </div>
       )}
 
-      {/* Publish confirmation modal */}
       {showPublishConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
@@ -387,16 +462,10 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
               This publishes the <strong>{displayMonth}</strong> schedule and replaces any previously published version.
             </p>
             <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowPublishConfirm(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-              >
+              <button onClick={() => setShowPublishConfirm(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
                 Cancel
               </button>
-              <button
-                onClick={handlePublish}
-                className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
-              >
+              <button onClick={handlePublish} className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors">
                 Publish
               </button>
             </div>
@@ -408,9 +477,7 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex flex-col sm:flex-row sm:items-end gap-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-              Month
-            </label>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Month</label>
             <input
               type="month"
               value={month}
@@ -418,6 +485,7 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
               className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B3A5C]"
             />
           </div>
+
           <button
             onClick={handleGenerate}
             disabled={isGenerating || isPublishing}
@@ -429,7 +497,7 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
-                Generating…
+                Generating...
               </>
             ) : (
               draftState ? `Regenerate ${displayMonth}` : `Generate ${displayMonth}`
@@ -448,16 +516,13 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
-                  Publishing…
+                  Publishing...
                 </>
-              ) : (
-                'Publish schedule'
-              )}
+              ) : 'Publish schedule'}
             </button>
           )}
         </div>
 
-        {/* Existing draft warning */}
         {draftState && !isGenerating && (
           <div className="mt-4 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
             <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -466,32 +531,76 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
             <span>
               A draft for <strong>{displayMonth}</strong> already exists
               {draftState.run.generated_at && (
-                <> (generated {format(parseISO(draftState.run.generated_at), 'MMM d, yyyy \'at\' HH:mm')})</>
-              )}
-              . Clicking Regenerate will replace it.
+                <> (generated {format(parseISO(draftState.run.generated_at), "MMM d, yyyy 'at' HH:mm")})</>
+              )}. Clicking Regenerate will replace it.
             </span>
           </div>
         )}
       </div>
 
-      {/* Published badge (shown even without a draft) */}
-      {publishedRun && !draftState && (
-        <div className="flex items-center gap-3">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-100 border border-green-300 text-green-800 text-xs font-semibold rounded-full uppercase tracking-wide">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-            Published
-          </span>
-          <span className="text-sm font-medium text-gray-700">{displayMonth}</span>
-          <span className="text-xs text-gray-500">
-            Published {format(parseISO(publishedRun.generated_at), 'MMM d, yyyy \'at\' HH:mm')}
-          </span>
-        </div>
+      {/* Published schedule view */}
+      {publishedState && (
+        <>
+          <div className="flex items-center gap-3 flex-wrap gap-y-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-100 border border-green-300 text-green-800 text-xs font-semibold rounded-full uppercase tracking-wide">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+              Published
+            </span>
+            <span className="text-sm font-medium text-gray-700">{displayMonth}</span>
+            <span className="text-xs text-gray-500">
+              Published {format(parseISO(publishedState.run.generated_at), "MMM d, yyyy 'at' HH:mm")}
+            </span>
+            {!draftState && (
+              <span className="text-xs text-gray-400 italic">This is the live schedule</span>
+            )}
+            <button
+              onClick={handleDownloadPDF}
+              disabled={isDownloadingPDF}
+              className="ml-auto flex items-center gap-2 bg-white border border-gray-300 hover:border-[#1B3A5C] hover:text-[#1B3A5C] disabled:opacity-60 disabled:cursor-not-allowed text-gray-700 text-sm font-medium px-4 py-1.5 rounded-lg transition-colors"
+            >
+              {isDownloadingPDF ? (
+                <>
+                  <svg className="animate-spin w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  Generating PDF...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                  </svg>
+                  Download PDF
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="flex flex-col lg:flex-row gap-6 items-start">
+            <div className="flex-1 min-w-0">
+              <ShiftCalendarClient
+                shifts={publishedCalShifts}
+                employee={manager}
+                requestedShiftIds={[]}
+                assignedShiftIds={[]}
+                draftMode={true}
+              />
+            </div>
+            <SummaryPanel
+              assignmentCount={publishedState.assignments.length}
+              unfilledSlots={publishedState.run.parameters_snapshot?.unfilled_slots ?? []}
+              fairnessSummary={publishedState.run.fairness_summary}
+              employeeMap={employeeMap}
+              labelSuffix="in published schedule"
+            />
+          </div>
+        </>
       )}
 
       {/* Draft view */}
       {draftState && (
         <>
-          {/* Draft header banner */}
           <div className="flex items-center gap-3 flex-wrap gap-y-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-100 border border-amber-300 text-amber-800 text-xs font-semibold rounded-full uppercase tracking-wide">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
@@ -501,89 +610,52 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
             {draftState.wasRegeneration && (
               <span className="text-xs text-gray-500 italic">Previous draft replaced</span>
             )}
-            {publishedRun && (
+            {publishedState && (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-green-100 border border-green-300 text-green-800 text-xs font-semibold rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-                Published {format(parseISO(publishedRun.generated_at), 'MMM d')} — live
+                Published version live -- publish draft to supersede
               </span>
             )}
-            <span className="ml-auto text-xs text-gray-400">Read-only preview — no changes published</span>
+            <span className="ml-auto text-xs text-gray-400">Click a shift to fill slots</span>
           </div>
 
-          {/* Main layout: calendar + summary */}
           <div className="flex flex-col lg:flex-row gap-6 items-start">
-
-            {/* Calendar */}
             <div className="flex-1 min-w-0">
               <ShiftCalendarClient
-                shifts={calShifts}
+                shifts={draftCalShifts}
                 employee={manager}
                 requestedShiftIds={[]}
                 assignedShiftIds={[]}
                 draftMode={true}
+                onDraftSlotClick={(shift) => setSelectedDraftShift(shift)}
               />
             </div>
-
-            {/* Summary panel */}
-            <div className="w-full lg:w-80 shrink-0 space-y-4">
-
-              {/* Total assignments */}
-              <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Total Assignments</p>
-                <p className="text-3xl font-bold text-[#1B3A5C]">{assignmentCount}</p>
-                <p className="text-xs text-gray-400 mt-0.5">shifts assigned this draft</p>
-              </div>
-
-              {/* Unfilled slots */}
-              <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Unfilled Slots</p>
-                {unfilledSlots.length === 0 ? (
-                  <div className="flex items-center gap-1.5 text-green-700 text-sm font-medium">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    All slots filled
-                  </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {groupUnfilledSlots(unfilledSlots).map((group) => {
-                      const [, shiftType] = group.key.split('|')
-                      const shiftChipClass =
-                        shiftType === 'morning' ? 'bg-amber-100 text-amber-700'
-                        : shiftType === 'evening' ? 'bg-blue-100 text-blue-700'
-                        : 'bg-indigo-100 text-indigo-700'
-                      const isPattern = group.dates.length > 1
-                      const shiftLabel = isPattern
-                        ? (SHIFT_TYPE_LABEL_PLURAL[shiftType] ?? shiftType)
-                        : (SHIFT_TYPE_LABEL_SINGULAR[shiftType] ?? shiftType)
-                      return (
-                        <div key={group.key} className="flex items-center justify-between text-sm py-1 border-b border-gray-50 last:border-0">
-                          <span className="text-gray-700">
-                            {isPattern
-                              ? `${group.label} ${shiftLabel} (${group.dates.length} dates)`
-                              : `${group.label} ${shiftLabel} — ${format(parseISO(group.dates[0]), 'MMM d')}`}
-                          </span>
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${shiftChipClass}`}>
-                            {shiftType}
-                          </span>
-                        </div>
-                      )
-                    })}
-                    <p className="text-xs text-gray-400 pt-1">{unfilledSlots.length} slot{unfilledSlots.length !== 1 ? 's' : ''} could not be filled</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Per-guard fairness */}
-              {fairnessSummary && Object.keys(fairnessSummary).length > 0 && (
-                <FairnessPanel
-                  fairnessSummary={fairnessSummary}
-                  employeeMap={employeeMap}
-                />
-              )}
-            </div>
+            <SummaryPanel
+              assignmentCount={draftState.assignments.length}
+              unfilledSlots={draftState.run.parameters_snapshot?.unfilled_slots ?? []}
+              fairnessSummary={draftState.run.fairness_summary}
+              employeeMap={employeeMap}
+              labelSuffix="shifts assigned this draft"
+            />
           </div>
         </>
+      )}
+
+      {/* Slot-fill panel (draft only) */}
+      {selectedDraftShift && draftState && (
+        <SlotPanel
+          shift={selectedDraftShift as any}
+          runId={draftState.run.id}
+          employeeMap={employeeMap}
+          assignedGuardIds={
+            draftState.assignments
+              .filter(a => a.shift_id === selectedDraftShift.id)
+              .map(a => a.employee_id)
+          }
+          onClose={() => setSelectedDraftShift(null)}
+          onAssign={(employeeId) => handleDraftAssign(selectedDraftShift.id, employeeId)}
+          onUnassign={(employeeId) => handleDraftUnassign(selectedDraftShift.id, employeeId)}
+        />
       )}
     </div>
   )
