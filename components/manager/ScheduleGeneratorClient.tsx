@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { format, parseISO, addMonths } from 'date-fns'
 import ShiftCalendarClient from '@/components/calendar/ShiftCalendarClient'
-import type { Employee } from '@/types'
+import SlotPanel from '@/components/manager/SlotPanel'
+import type { Employee, Shift } from '@/types'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -238,6 +239,7 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
   const [draftState, setDraftState] = useState<DraftState | null>(null)
   const [publishedRun, setPublishedRun] = useState<PublishedRun | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [selectedDraftShift, setSelectedDraftShift] = useState<Shift | null>(null)
 
   const employeeMap = useMemo(() => {
     const map: Record<string, string> = {}
@@ -248,6 +250,35 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
   const showToast = useCallback((type: 'success' | 'error', message: string) => {
     setToast({ type, message })
     setTimeout(() => setToast(null), 4000)
+  }, [])
+
+  // Called when SlotPanel assigns a guard: update local state so coverage pills refresh immediately
+  const handleDraftAssign = useCallback((shiftId: string, employeeId: string) => {
+    setDraftState(prev => {
+      if (!prev) return prev
+      const newAssignments = [...prev.assignments, { id: `optimistic-${employeeId}-${shiftId}`, employee_id: employeeId, shift_id: shiftId }]
+      const newShifts = prev.shifts.map((s: any) =>
+        s.id === shiftId ? { ...s, assignment_count: (s.assignment_count ?? 0) + 1 } : s,
+      )
+      return { ...prev, assignments: newAssignments, shifts: newShifts }
+    })
+    // Also update the selectedDraftShift so the panel sees fresh headcount
+    setSelectedDraftShift(prev => prev?.id === shiftId ? { ...prev, assignment_count: (prev as any).assignment_count + 1 } as any : prev)
+  }, [])
+
+  // Called when SlotPanel removes a guard
+  const handleDraftUnassign = useCallback((shiftId: string, employeeId: string) => {
+    setDraftState(prev => {
+      if (!prev) return prev
+      const newAssignments = prev.assignments.filter(
+        a => !(a.shift_id === shiftId && a.employee_id === employeeId),
+      )
+      const newShifts = prev.shifts.map((s: any) =>
+        s.id === shiftId ? { ...s, assignment_count: Math.max(0, (s.assignment_count ?? 0) - 1) } : s,
+      )
+      return { ...prev, assignments: newAssignments, shifts: newShifts }
+    })
+    setSelectedDraftShift(prev => prev?.id === shiftId ? { ...prev, assignment_count: Math.max(0, ((prev as any).assignment_count ?? 1) - 1) } as any : prev)
   }, [])
 
   // Fetch any existing draft when month changes
@@ -521,6 +552,7 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
                 requestedShiftIds={[]}
                 assignedShiftIds={[]}
                 draftMode={true}
+                onDraftSlotClick={(shift) => setSelectedDraftShift(shift)}
               />
             </div>
 
@@ -584,6 +616,23 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
             </div>
           </div>
         </>
+      )}
+
+      {/* Draft slot panel */}
+      {selectedDraftShift && draftState && (
+        <SlotPanel
+          shift={selectedDraftShift as any}
+          runId={draftState.run.id}
+          employeeMap={employeeMap}
+          assignedGuardIds={
+            draftState.assignments
+              .filter(a => a.shift_id === selectedDraftShift.id)
+              .map(a => a.employee_id)
+          }
+          onClose={() => setSelectedDraftShift(null)}
+          onAssign={(employeeId) => handleDraftAssign(selectedDraftShift.id, employeeId)}
+          onUnassign={(employeeId) => handleDraftUnassign(selectedDraftShift.id, employeeId)}
+        />
       )}
     </div>
   )
