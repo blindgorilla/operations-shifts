@@ -70,7 +70,7 @@ export async function GET(request: Request) {
   // ── 1. Latest published run for this month ───────────────────────────────
   const { data: runs } = await admin
     .from('schedule_runs')
-    .select('id, generated_at, parameters_snapshot')
+    .select('id, generated_at, last_edited_at, parameters_snapshot')
     .eq('period_start', periodStart)
     .eq('period_end', periodEnd)
     .eq('status', 'published')
@@ -116,12 +116,16 @@ export async function GET(request: Request) {
   // ── 6. Render PDF ────────────────────────────────────────────────────────
   const monthLabel   = format(parseISO(`${month}-01`), 'MMMM yyyy')
   const publishedAt  = format(parseISO(run.generated_at), 'MMM d, yyyy')
+  const lastEditedAt = run.last_edited_at
+    ? format(parseISO(run.last_edited_at), "MMM d, yyyy 'at' HH:mm")
+    : null
   const generatedAt  = format(new Date(), "MMM d, yyyy 'at' HH:mm")
 
   const pdfBuffer = await renderToBuffer(
     <SchedulePDF
       monthLabel={monthLabel}
       publishedAt={publishedAt}
+      lastEditedAt={lastEditedAt}
       generatedAt={generatedAt}
       employees={employees}
       shifts={shifts}
