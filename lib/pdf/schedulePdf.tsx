@@ -252,6 +252,27 @@ const BASE = StyleSheet.create({
     color: '#EF4444',
   },
 
+  // Override footnote
+  overrideBox: {
+    marginTop: 4,
+    padding: 5,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 3,
+    borderWidth: 0.75,
+    borderColor: '#FCD34D',
+  },
+  overrideLabel: {
+    fontSize: 7,
+    color: '#92400E',
+    fontFamily: 'Helvetica-Bold',
+    marginBottom: 3,
+  },
+  overrideItem: {
+    fontSize: 6.5,
+    color: '#78350F',
+    marginBottom: 1.5,
+  },
+
   // Footer
   footer: {
     flexDirection: 'row',
@@ -309,7 +330,7 @@ const BASE = StyleSheet.create({
 // ---------------------------------------------------------------------------
 export interface PDFEmployee  { id: string; name: string }
 export interface PDFShift     { id: string; date: string; shift_type: string }
-export interface PDFAssignment { employee_id: string; shift_id: string }
+export interface PDFAssignment { employee_id: string; shift_id: string; override_reason?: string | null }
 export interface UnfilledSlot { date: string; shift_type: string; day_type: string }
 
 interface Props {
@@ -330,22 +351,60 @@ interface Props {
 // ---------------------------------------------------------------------------
 // Grid builder
 // ---------------------------------------------------------------------------
+interface GridCell { type: string; override: boolean }
+
 function buildGrid(
   employees: PDFEmployee[],
   shifts: PDFShift[],
   assignments: PDFAssignment[],
-): Record<string, Record<number, string>> {
+): Record<string, Record<number, GridCell>> {
   const shiftInfo: Record<string, { day: number; type: string }> = {}
   for (const s of shifts) {
     shiftInfo[s.id] = { day: parseInt(s.date.slice(8, 10), 10), type: s.shift_type }
   }
-  const grid: Record<string, Record<number, string>> = {}
+  const grid: Record<string, Record<number, GridCell>> = {}
   for (const e of employees) grid[e.id] = {}
   for (const a of assignments) {
     const info = shiftInfo[a.shift_id]
-    if (info && grid[a.employee_id]) grid[a.employee_id][info.day] = info.type
+    if (info && grid[a.employee_id]) {
+      grid[a.employee_id][info.day] = { type: info.type, override: !!a.override_reason }
+    }
   }
   return grid
+}
+
+interface OverrideEntry {
+  day: number
+  shiftType: string
+  employeeName: string
+  reason: string
+}
+
+function buildOverrides(
+  employees: PDFEmployee[],
+  shifts: PDFShift[],
+  assignments: PDFAssignment[],
+): OverrideEntry[] {
+  const empName: Record<string, string> = {}
+  for (const e of employees) empName[e.id] = e.name
+  const shiftInfo: Record<string, { day: number; type: string }> = {}
+  for (const s of shifts) {
+    shiftInfo[s.id] = { day: parseInt(s.date.slice(8, 10), 10), type: s.shift_type }
+  }
+  const entries: OverrideEntry[] = []
+  for (const a of assignments) {
+    if (!a.override_reason) continue
+    const info = shiftInfo[a.shift_id]
+    if (!info) continue
+    entries.push({
+      day: info.day,
+      shiftType: info.type,
+      employeeName: empName[a.employee_id] ?? a.employee_id.slice(0, 8),
+      reason: a.override_reason,
+    })
+  }
+  entries.sort((a, b) => a.day - b.day || a.employeeName.localeCompare(b.employeeName))
+  return entries
 }
 
 // ---------------------------------------------------------------------------
@@ -356,8 +415,9 @@ export function SchedulePDF({
   employees, shifts, assignments, unfilledSlots,
   logoSrc, daysInMonth, year, month,
 }: Props) {
-  const sorted = [...employees].sort((a, b) => a.name.localeCompare(b.name))
-  const grid   = buildGrid(sorted, shifts, assignments)
+  const sorted    = [...employees].sort((a, b) => a.name.localeCompare(b.name))
+  const grid      = buildGrid(sorted, shifts, assignments)
+  const overrides = buildOverrides(sorted, shifts, assignments)
   const days   = Array.from({ length: daysInMonth }, (_, i) => i + 1)
   const rh     = rowHeight(sorted.length)
   const shiftFontSize = Math.min(9, Math.max(7, Math.round(rh * 0.32)))
@@ -433,7 +493,7 @@ export function SchedulePDF({
           {sorted.map((emp, idx) => {
             const empRow     = grid[emp.id] ?? {}
             const totalShifts = Object.keys(empRow).length
-            const nightShifts = Object.values(empRow).filter(t => t === 'night').length
+            const nightShifts = Object.values(empRow).filter(c => c.type === 'night').length
             const rowBg = idx % 2 === 1 ? '#FAFBFC' : WHITE
 
             return (
@@ -456,7 +516,9 @@ export function SchedulePDF({
 
                 {/* Day cells */}
                 {days.map(d => {
-                  const shiftType = empRow[d]
+                  const cell = empRow[d]
+                  const shiftType = cell?.type
+                  const isOverride = cell?.override ?? false
                   const bg = colBg(year, month, d) === WHITE
                     ? (idx % 2 === 1 ? '#FAFBFC' : WHITE)
                     : colBg(year, month, d)
@@ -466,7 +528,7 @@ export function SchedulePDF({
                       {shiftType && (
                         <View style={[BASE.shiftPill, { backgroundColor: SHIFT_BG[shiftType] ?? '#F3F4F6' }]}>
                           <Text style={{ fontSize: shiftFontSize, fontFamily: 'Helvetica-Bold', color: SHIFT_FG[shiftType] ?? '#374151' }}>
-                            {SHIFT_CODE[shiftType] ?? '?'}
+                            {(SHIFT_CODE[shiftType] ?? '?')}{isOverride ? '†' : ''}
                           </Text>
                         </View>
                       )}
@@ -506,6 +568,18 @@ export function SchedulePDF({
           </View>
         )}
 
+        {/* ── Override footnote ── */}
+        {overrides.length > 0 && (
+          <View style={BASE.overrideBox}>
+            <Text style={BASE.overrideLabel}>† Override assignments ({overrides.length}):</Text>
+            {overrides.map((o, i) => (
+              <Text key={i} style={BASE.overrideItem}>
+                {`Day ${o.day} ${(SHIFT_CODE[o.shiftType] ?? o.shiftType).toUpperCase()} — ${o.employeeName}: ${o.reason}`}
+              </Text>
+            ))}
+          </View>
+        )}
+
         {/* ── Footer ── */}
         <View style={BASE.footer}>
 
@@ -539,6 +613,11 @@ export function SchedulePDF({
                 <Text style={[BASE.legendPillText, { color: '#D97706' }]}>F</Text>
               </View>
               <Text style={BASE.legendDesc}>Friday</Text>
+            </View>
+            <Text style={BASE.legendSep}>·</Text>
+            <View style={BASE.legendItem}>
+              <Text style={[BASE.legendPillText, { color: '#92400E', fontSize: 8 }]}>†</Text>
+              <Text style={BASE.legendDesc}>Override</Text>
             </View>
           </View>
 

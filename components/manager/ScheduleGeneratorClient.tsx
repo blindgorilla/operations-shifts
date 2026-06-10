@@ -31,6 +31,7 @@ interface ScheduleAssignment {
   id: string
   employee_id: string
   shift_id: string
+  override_reason?: string | null
 }
 
 interface LeaveRecord {
@@ -404,12 +405,12 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
   // Draft optimistic updates
   // ---------------------------------------------------------------------------
 
-  const handleDraftAssign = useCallback((shiftId: string, employeeId: string) => {
+  const handleDraftAssign = useCallback((shiftId: string, employeeId: string, overrideReason?: string | null) => {
     setDraftState(prev => {
       if (!prev) return prev
       const newAssignments = [
         ...prev.assignments,
-        { id: `optimistic-${employeeId}-${shiftId}`, employee_id: employeeId, shift_id: shiftId },
+        { id: `optimistic-${employeeId}-${shiftId}`, employee_id: employeeId, shift_id: shiftId, override_reason: overrideReason ?? null },
       ]
       const newShifts = prev.shifts.map((s: any) =>
         s.id === shiftId ? { ...s, assignment_count: (s.assignment_count ?? 0) + 1 } : s,
@@ -445,12 +446,12 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
   // Published optimistic updates
   // ---------------------------------------------------------------------------
 
-  const handlePublishedAssign = useCallback((shiftId: string, employeeId: string, lastEditedAt?: string) => {
+  const handlePublishedAssign = useCallback((shiftId: string, employeeId: string, lastEditedAt?: string, overrideReason?: string | null) => {
     setPublishedState(prev => {
       if (!prev) return prev
       const newAssignments = [
         ...prev.assignments,
-        { id: `optimistic-pub-${employeeId}-${shiftId}`, employee_id: employeeId, shift_id: shiftId },
+        { id: `optimistic-pub-${employeeId}-${shiftId}`, employee_id: employeeId, shift_id: shiftId, override_reason: overrideReason ?? null },
       ]
       const newShifts = prev.shifts.map((s: any) =>
         s.id === shiftId ? { ...s, assignment_count: (s.assignment_count ?? 0) + 1 } : s,
@@ -681,6 +682,48 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
     return ids
   }, [publishedState])
 
+  // Shift IDs with at least one override assignment — per view
+  const publishedOverrideShiftIds = useMemo(() => {
+    if (!publishedState) return new Set<string>()
+    const ids = new Set<string>()
+    for (const a of publishedState.assignments) {
+      if (a.override_reason) ids.add(a.shift_id)
+    }
+    return ids
+  }, [publishedState])
+
+  const draftOverrideShiftIds = useMemo(() => {
+    if (!draftState) return new Set<string>()
+    const ids = new Set<string>()
+    for (const a of draftState.assignments) {
+      if (a.override_reason) ids.add(a.shift_id)
+    }
+    return ids
+  }, [draftState])
+
+  // guardId → override_reason map for the open SlotPanel's shift (per view)
+  const publishedOverrideReasonMap = useMemo(() => {
+    if (!publishedState || !selectedPublishedShift) return {}
+    const map: Record<string, string> = {}
+    for (const a of publishedState.assignments) {
+      if (a.shift_id === selectedPublishedShift.id && a.override_reason) {
+        map[a.employee_id] = a.override_reason
+      }
+    }
+    return map
+  }, [publishedState, selectedPublishedShift])
+
+  const draftOverrideReasonMap = useMemo(() => {
+    if (!draftState || !selectedDraftShift) return {}
+    const map: Record<string, string> = {}
+    for (const a of draftState.assignments) {
+      if (a.shift_id === selectedDraftShift.id && a.override_reason) {
+        map[a.employee_id] = a.override_reason
+      }
+    }
+    return map
+  }, [draftState, selectedDraftShift])
+
   // Calendar defaultDate derived from selected month
   const calendarDefaultDate = useMemo(() => {
     try { return parseISO(`${month}-01`) } catch { return new Date() }
@@ -818,6 +861,14 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
                 {needsCoverShiftIds.size} shift{needsCoverShiftIds.size !== 1 ? 's' : ''} need cover
               </span>
             )}
+            {publishedOverrideShiftIds.size > 0 && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-100 border border-amber-300 text-amber-800 text-xs font-semibold rounded-full">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+                {publishedOverrideShiftIds.size} override{publishedOverrideShiftIds.size !== 1 ? 's' : ''}
+              </span>
+            )}
             <span className="text-xs text-gray-400 italic ml-1">Click a shift to edit</span>
             <button
               onClick={handleDownloadPDF}
@@ -853,6 +904,7 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
                 draftMode={true}
                 defaultDate={calendarDefaultDate}
                 needsCoverShiftIds={needsCoverShiftIds}
+                overrideShiftIds={publishedOverrideShiftIds}
                 onDraftSlotClick={(shift) => setSelectedPublishedShift(shift)}
               />
             </div>
@@ -885,6 +937,14 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
                 Published version live -- publish draft to supersede
               </span>
             )}
+            {draftOverrideShiftIds.size > 0 && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-100 border border-amber-300 text-amber-800 text-xs font-semibold rounded-full">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+                {draftOverrideShiftIds.size} override{draftOverrideShiftIds.size !== 1 ? 's' : ''}
+              </span>
+            )}
             <span className="ml-auto text-xs text-gray-400">Click a shift to fill slots</span>
           </div>
 
@@ -897,6 +957,7 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
                 assignedShiftIds={[]}
                 draftMode={true}
                 defaultDate={calendarDefaultDate}
+                overrideShiftIds={draftOverrideShiftIds}
                 onDraftSlotClick={(shift) => setSelectedDraftShift(shift)}
               />
             </div>
@@ -923,8 +984,11 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
               .filter(a => a.shift_id === selectedDraftShift.id)
               .map(a => a.employee_id)
           }
+          overrideReasonMap={draftOverrideReasonMap}
           onClose={() => setSelectedDraftShift(null)}
-          onAssign={(employeeId) => handleDraftAssign(selectedDraftShift.id, employeeId)}
+          onAssign={(employeeId, _name, _lastEditedAt, overrideReason) =>
+            handleDraftAssign(selectedDraftShift.id, employeeId, overrideReason ?? null)
+          }
           onUnassign={(employeeId) => handleDraftUnassign(selectedDraftShift.id, employeeId)}
         />
       )}
@@ -941,12 +1005,15 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
               .filter(a => a.shift_id === selectedPublishedShift.id)
               .map(a => a.employee_id)
           }
+          overrideReasonMap={publishedOverrideReasonMap}
           sickGuardIds={getLeaveGuardsForDate(
             publishedState.leaveRecords ?? [],
             selectedPublishedShift.date,
           )}
           onClose={() => setSelectedPublishedShift(null)}
-          onAssign={(employeeId, _name, lastEditedAt) => handlePublishedAssign(selectedPublishedShift.id, employeeId, lastEditedAt)}
+          onAssign={(employeeId, _name, lastEditedAt, overrideReason) =>
+            handlePublishedAssign(selectedPublishedShift.id, employeeId, lastEditedAt, overrideReason ?? null)
+          }
           onUnassign={(employeeId, lastEditedAt) => handlePublishedUnassign(selectedPublishedShift.id, employeeId, lastEditedAt)}
           onMarkSick={(employeeId, employeeName) =>
             setMarkSickTarget({ employeeId, employeeName, shiftDate: selectedPublishedShift.date })

@@ -34,10 +34,12 @@ interface Props {
   assignedGuardIds: string[]
   /** Guards on approved leave for this shift's date (published mode only) */
   sickGuardIds?: Set<string>
+  /** guardId → override reason for currently assigned guards */
+  overrideReasonMap?: Record<string, string>
   /** 'draft' uses assign/unassign-draft; 'published' uses assign/unassign-published */
   mode?: 'draft' | 'published'
   onClose: () => void
-  onAssign: (employeeId: string, employeeName: string, lastEditedAt?: string) => void
+  onAssign: (employeeId: string, employeeName: string, lastEditedAt?: string, overrideReason?: string | null) => void
   onUnassign: (employeeId: string, lastEditedAt?: string) => void
   onMarkSick?: (employeeId: string, employeeName: string) => void
 }
@@ -58,6 +60,7 @@ export default function SlotPanel({
   employeeMap,
   assignedGuardIds,
   sickGuardIds,
+  overrideReasonMap = {},
   mode = 'draft',
   onClose,
   onAssign,
@@ -142,7 +145,7 @@ export default function SlotPanel({
       if (mode === 'published' && replaceTarget) {
         onUnassign(replaceTarget, data.last_edited_at)
       }
-      onAssign(employeeId, employeeName, data.last_edited_at)
+      onAssign(employeeId, employeeName, data.last_edited_at, data.rule_reason ?? null)
       await fetchCandidates()
     } catch {
       setActionError('Network error')
@@ -286,8 +289,10 @@ export default function SlotPanel({
               <ul className="space-y-1.5">
                 {assignedGuardIds.map(id => {
                   const isOnLeave = sickGuardIds?.has(id) ?? false
+                  const overrideReason = overrideReasonMap[id] ?? null
                   return (
-                    <li key={id} className={`flex items-center justify-between rounded-lg px-3 py-2 ${isOnLeave ? 'bg-red-50 border border-red-200' : 'bg-gray-50'}`}>
+                    <li key={id} className={`flex flex-col rounded-lg px-3 py-2 gap-1 ${isOnLeave ? 'bg-red-50 border border-red-200' : overrideReason ? 'bg-amber-50 border border-amber-200' : 'bg-gray-50'}`}>
+                      <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-sm font-medium text-gray-800 truncate">
                           {employeeMap[id] ?? id.slice(0, 8)}
@@ -316,6 +321,15 @@ export default function SlotPanel({
                           {busy === id ? '…' : 'Remove'}
                         </button>
                       </div>
+                      </div>
+                      {overrideReason && (
+                        <div className="flex items-center gap-1 text-[10px] font-semibold text-amber-700">
+                          <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                          </svg>
+                          Override: {overrideReason}
+                        </div>
+                      )}
                     </li>
                   )
                 })}

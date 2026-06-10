@@ -242,8 +242,9 @@ export async function POST(request: Request) {
       assigned_by: user.id,
       schedule_run_id: run_id,
       status: 'published',
+      ...(rule_reason ? { override_reason: rule_reason } : {}),
     })
-    .select('id, employee_id, shift_id')
+    .select('id, employee_id, shift_id, override_reason')
     .single()
 
   if (insertErr) {

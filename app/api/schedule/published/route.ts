@@ -59,7 +59,7 @@ export async function GET(request: Request) {
 
   const { data: assignments } = await admin
     .from('shift_assignments')
-    .select('id, employee_id, shift_id')
+    .select('id, employee_id, shift_id, override_reason')
     .eq('schedule_run_id', run.id)
     .eq('status', 'published')
 

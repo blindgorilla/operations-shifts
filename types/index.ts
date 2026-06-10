@@ -42,6 +42,7 @@ export interface ShiftAssignment {
   shift_id: string
   assigned_by: string | null
   created_at: string
+  override_reason?: string | null
   employee?: Employee
   shift?: Shift
 }

@@ -35,6 +35,8 @@ interface ShiftCalendarClientProps {
   defaultDate?: Date
   /** Shift IDs that have at least one guard on approved leave — shown with red 'needs cover' indicator */
   needsCoverShiftIds?: Set<string>
+  /** Shift IDs that have at least one override assignment */
+  overrideShiftIds?: Set<string>
 }
 
 const SHIFT_COLORS: Record<string, string> = {
@@ -82,6 +84,7 @@ export default function ShiftCalendarClient({
   onDraftSlotClick,
   defaultDate,
   needsCoverShiftIds,
+  overrideShiftIds,
 }: ShiftCalendarClientProps) {
   const router = useRouter()
   const [dashboardTab, setDashboardTab] = useState<'available' | 'schedule'>(
@@ -263,6 +266,7 @@ export default function ShiftCalendarClient({
         {shiftsForDay.map((shift) => {
           const rawCount = (shift as any).assignment_count ?? 0
           const needsCover = needsCoverShiftIds?.has(shift.id) ?? false
+          const hasOverride = overrideShiftIds?.has(shift.id) ?? false
           // Use effective count (on-leave guards excluded) when needs-cover so pill agrees with SlotPanel
           const count = needsCover
             ? ((shift as any).effective_assignment_count ?? rawCount)
@@ -275,6 +279,9 @@ export default function ShiftCalendarClient({
             : count < headcount ? '#f59e0b'
             : '#16a34a'
           const label = { morning: 'M', evening: 'E', night: 'N' }[shift.shift_type] ?? '?'
+          const titleParts: string[] = []
+          if (needsCover) titleParts.push('Needs cover — guard on leave')
+          if (hasOverride) titleParts.push('Contains override assignment')
           return (
             <div
               key={shift.id}
@@ -293,16 +300,16 @@ export default function ShiftCalendarClient({
                 boxShadow: needsCover ? '0 0 0 1.5px #991b1b' : undefined,
               }}
               className="flex items-center justify-between text-white text-[10px] font-semibold px-1 py-0.5 rounded cursor-pointer hover:opacity-90 transition-opacity"
-              title={needsCover ? 'Needs cover — guard on leave' : undefined}
+              title={titleParts.length > 0 ? titleParts.join(' · ') : undefined}
             >
-              <span>{label}{needsCover ? ' ⚑' : ''}</span>
+              <span>{label}{needsCover ? ' ⚑' : ''}{hasOverride ? ' ⚠' : ''}</span>
               <span>{count}/{headcount}</span>
             </div>
           )
         })}
       </div>
     )
-  }, [onDraftSlotClick, needsCoverShiftIds])
+  }, [onDraftSlotClick, needsCoverShiftIds, overrideShiftIds])
 
   return (
     <div>

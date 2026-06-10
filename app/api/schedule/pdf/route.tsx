@@ -94,11 +94,11 @@ export async function GET(request: Request) {
   // ── 3. Published assignments for this run ────────────────────────────────
   const { data: rawAssignments } = await admin
     .from('shift_assignments')
-    .select('employee_id, shift_id')
+    .select('employee_id, shift_id, override_reason')
     .eq('schedule_run_id', run.id)
     .eq('status', 'published')
 
-  const assignments = (rawAssignments ?? []) as { employee_id: string; shift_id: string }[]
+  const assignments = (rawAssignments ?? []) as { employee_id: string; shift_id: string; override_reason?: string | null }[]
 
   // ── 4. Employees (names) ─────────────────────────────────────────────────
   const employeeIds = [...new Set(assignments.map(a => a.employee_id))]

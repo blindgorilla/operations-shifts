@@ -87,9 +87,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Guard is already assigned to this slot' }, { status: 409 })
   }
 
-  // Server-side eligibility re-check (unless override)
-  if (!override) {
-    // Gather inputs for suggester
+  // Eligibility check — always run to capture rule reason.
+  // When override=false it also gates the assign.
+  let rule_reason: string | null = null
+  {
     const { data: allAssignmentsRaw } = await admin
       .from('shift_assignments')
       .select('id, employee_id, shift_id')
@@ -155,7 +156,10 @@ export async function POST(request: Request) {
     if (!isElig) {
       const ineligEntry = result.ineligible.find(c => c.employee.id === employee_id)
       const reason = ineligEntry?.reason ?? 'Ineligible for this slot'
-      return NextResponse.json({ error: reason, ineligible: true }, { status: 422 })
+      if (!override) {
+        return NextResponse.json({ error: reason, ineligible: true }, { status: 422 })
+      }
+      rule_reason = reason
     }
   }
 
@@ -168,13 +172,14 @@ export async function POST(request: Request) {
       assigned_by: user.id,
       schedule_run_id: run_id,
       status: 'draft',
+      ...(rule_reason ? { override_reason: rule_reason } : {}),
     })
-    .select('id, employee_id, shift_id')
+    .select('id, employee_id, shift_id, override_reason')
     .single()
 
   if (insertErr) {
     return NextResponse.json({ error: insertErr.message }, { status: 500 })
   }
 
-  return NextResponse.json({ assignment: inserted })
+  return NextResponse.json({ assignment: inserted, rule_reason })
 }
