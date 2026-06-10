@@ -315,6 +315,7 @@ export interface UnfilledSlot { date: string; shift_type: string; day_type: stri
 interface Props {
   monthLabel: string
   publishedAt: string
+  lastEditedAt?: string | null
   generatedAt: string
   employees: PDFEmployee[]
   shifts: PDFShift[]
@@ -351,7 +352,7 @@ function buildGrid(
 // Component
 // ---------------------------------------------------------------------------
 export function SchedulePDF({
-  monthLabel, publishedAt, generatedAt,
+  monthLabel, publishedAt, lastEditedAt, generatedAt,
   employees, shifts, assignments, unfilledSlots,
   logoSrc, daysInMonth, year, month,
 }: Props) {
@@ -374,7 +375,9 @@ export function SchedulePDF({
           }
           <View style={BASE.headerCenter}>
             <Text style={BASE.headerTitle}>Monthly Shift Schedule — {monthLabel}</Text>
-            <Text style={BASE.headerSub}>Published {publishedAt}</Text>
+            <Text style={BASE.headerSub}>
+              Published {publishedAt}{lastEditedAt ? `  ·  Last updated ${lastEditedAt}` : ''}
+            </Text>
           </View>
           <View style={BASE.headerRight}>
             <Text style={BASE.headerRightText}>MS Security Group</Text>

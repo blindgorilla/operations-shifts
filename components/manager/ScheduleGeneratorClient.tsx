@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { format, parseISO, addMonths } from 'date-fns'
+import { format, parseISO, addMonths, isWithinInterval } from 'date-fns'
 import ShiftCalendarClient from '@/components/calendar/ShiftCalendarClient'
 import SlotPanel from '@/components/manager/SlotPanel'
 import type { Employee, Shift } from '@/types'
@@ -33,12 +33,21 @@ interface ScheduleAssignment {
   shift_id: string
 }
 
+interface LeaveRecord {
+  id: string
+  employee_id: string
+  start_date: string
+  end_date: string
+  type: string
+}
+
 interface ScheduleRun {
   id: string
   period_start: string
   period_end: string
   status: string
   generated_at: string
+  last_edited_at?: string | null
   fairness_summary: Record<string, EmployeeFairnessCounters> | null
   parameters_snapshot: { unfilled_slots?: UnfilledSlot[]; month?: string } | null
 }
@@ -47,6 +56,7 @@ interface ScheduleState {
   run: ScheduleRun
   shifts: any[]
   assignments: ScheduleAssignment[]
+  leaveRecords?: LeaveRecord[]
   wasRegeneration?: boolean
 }
 
@@ -69,6 +79,18 @@ function formatMonthDisplay(month: string): string {
   } catch {
     return month
   }
+}
+
+/** Returns the set of employee IDs on approved leave for a specific date */
+function getLeaveGuardsForDate(leaveRecords: LeaveRecord[], date: string): Set<string> {
+  const d = parseISO(date)
+  const ids = new Set<string>()
+  for (const r of leaveRecords) {
+    if (isWithinInterval(d, { start: parseISO(r.start_date), end: parseISO(r.end_date) })) {
+      ids.add(r.employee_id)
+    }
+  }
+  return ids
 }
 
 const DAY_TYPE_LABEL: Record<string, string> = {
@@ -190,7 +212,7 @@ function FairnessPanel({
 }
 
 // ---------------------------------------------------------------------------
-// SummaryPanel -- shared between draft and published views
+// SummaryPanel
 // ---------------------------------------------------------------------------
 
 function SummaryPanel({
@@ -259,6 +281,97 @@ function SummaryPanel({
 }
 
 // ---------------------------------------------------------------------------
+// MarkSickModal
+// ---------------------------------------------------------------------------
+
+interface MarkSickModalProps {
+  employeeName: string
+  defaultDate: string
+  onConfirm: (fromDate: string, throughDate: string) => Promise<void>
+  onCancel: () => void
+}
+
+function MarkSickModal({ employeeName, defaultDate, onConfirm, onCancel }: MarkSickModalProps) {
+  const [fromDate, setFromDate] = useState(defaultDate)
+  const [throughDate, setThroughDate] = useState(defaultDate)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  async function handleSubmit() {
+    if (throughDate < fromDate) { setErr('Through date must be on or after from date'); return }
+    setBusy(true)
+    setErr(null)
+    try {
+      await onConfirm(fromDate, throughDate)
+    } catch (e: any) {
+      setErr(e?.message ?? 'Failed to mark sick')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50" onClick={onCancel}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+            <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">Mark sick</h3>
+            <p className="text-sm text-gray-600 mt-0.5">
+              Record sick leave for <strong>{employeeName}</strong>. This will flag their shifts as needing cover.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-3 mb-4">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">From</label>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={e => setFromDate(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B3A5C]"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Through</label>
+            <input
+              type="date"
+              value={throughDate}
+              onChange={e => setThroughDate(e.target.value)}
+              min={fromDate}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B3A5C]"
+            />
+          </div>
+        </div>
+
+        {err && <p className="mb-3 text-sm text-red-600">{err}</p>}
+
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg text-sm transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={busy}
+            className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-medium py-2 rounded-lg text-sm transition-colors"
+          >
+            {busy ? 'Saving…' : 'Mark sick'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -272,6 +385,9 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
   const [publishedState, setPublishedState] = useState<ScheduleState | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [selectedDraftShift, setSelectedDraftShift] = useState<Shift | null>(null)
+  const [selectedPublishedShift, setSelectedPublishedShift] = useState<Shift | null>(null)
+  // Mark sick modal state
+  const [markSickTarget, setMarkSickTarget] = useState<{ employeeId: string; employeeName: string; shiftDate: string } | null>(null)
 
   const employeeMap = useMemo(() => {
     const map: Record<string, string> = {}
@@ -283,6 +399,10 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
     setToast({ type, message })
     setTimeout(() => setToast(null), 4000)
   }, [])
+
+  // ---------------------------------------------------------------------------
+  // Draft optimistic updates
+  // ---------------------------------------------------------------------------
 
   const handleDraftAssign = useCallback((shiftId: string, employeeId: string) => {
     setDraftState(prev => {
@@ -321,6 +441,51 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
     )
   }, [])
 
+  // ---------------------------------------------------------------------------
+  // Published optimistic updates
+  // ---------------------------------------------------------------------------
+
+  const handlePublishedAssign = useCallback((shiftId: string, employeeId: string) => {
+    setPublishedState(prev => {
+      if (!prev) return prev
+      const newAssignments = [
+        ...prev.assignments,
+        { id: `optimistic-pub-${employeeId}-${shiftId}`, employee_id: employeeId, shift_id: shiftId },
+      ]
+      const newShifts = prev.shifts.map((s: any) =>
+        s.id === shiftId ? { ...s, assignment_count: (s.assignment_count ?? 0) + 1 } : s,
+      )
+      return { ...prev, assignments: newAssignments, shifts: newShifts }
+    })
+    setSelectedPublishedShift(prev =>
+      prev?.id === shiftId
+        ? { ...prev, assignment_count: ((prev as any).assignment_count ?? 0) + 1 } as any
+        : prev,
+    )
+  }, [])
+
+  const handlePublishedUnassign = useCallback((shiftId: string, employeeId: string) => {
+    setPublishedState(prev => {
+      if (!prev) return prev
+      const newAssignments = prev.assignments.filter(
+        a => !(a.shift_id === shiftId && a.employee_id === employeeId),
+      )
+      const newShifts = prev.shifts.map((s: any) =>
+        s.id === shiftId ? { ...s, assignment_count: Math.max(0, (s.assignment_count ?? 0) - 1) } : s,
+      )
+      return { ...prev, assignments: newAssignments, shifts: newShifts }
+    })
+    setSelectedPublishedShift(prev =>
+      prev?.id === shiftId
+        ? { ...prev, assignment_count: Math.max(0, ((prev as any).assignment_count ?? 1) - 1) } as any
+        : prev,
+    )
+  }, [])
+
+  // ---------------------------------------------------------------------------
+  // Data fetching
+  // ---------------------------------------------------------------------------
+
   useEffect(() => {
     let cancelled = false
 
@@ -340,13 +505,19 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
         if (!res.ok || cancelled) return
         const data = await res.json()
         if (cancelled) return
-        setPublishedState(data.run ? { run: data.run, shifts: data.shifts, assignments: data.assignments } : null)
+        setPublishedState(data.run
+          ? { run: data.run, shifts: data.shifts, assignments: data.assignments, leaveRecords: data.leaveRecords ?? [] }
+          : null)
       } catch { /* silent */ }
     }
 
     fetchBoth()
     return () => { cancelled = true }
   }, [month])
+
+  // ---------------------------------------------------------------------------
+  // Actions
+  // ---------------------------------------------------------------------------
 
   async function handleGenerate() {
     const hadExistingDraft = draftState !== null
@@ -399,7 +570,9 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
       }
       if (pubRes.ok) {
         const p = await pubRes.json()
-        setPublishedState(p.run ? { run: p.run, shifts: p.shifts, assignments: p.assignments } : null)
+        setPublishedState(p.run
+          ? { run: p.run, shifts: p.shifts, assignments: p.assignments, leaveRecords: p.leaveRecords ?? [] }
+          : null)
       }
       showToast('success', `${displayMonth} schedule published`)
     } catch {
@@ -428,6 +601,36 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
     }
   }
 
+  async function handleMarkSickConfirm(fromDate: string, throughDate: string) {
+    if (!markSickTarget) return
+    const res = await fetch('/api/schedule/mark-sick', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        employee_id: markSickTarget.employeeId,
+        from_date: fromDate,
+        through_date: throughDate,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? 'Failed to mark sick')
+
+    // Refresh published state to pick up new leave record
+    const pubRes = await fetch(`/api/schedule/published?month=${month}`)
+    if (pubRes.ok) {
+      const p = await pubRes.json()
+      setPublishedState(p.run
+        ? { run: p.run, shifts: p.shifts, assignments: p.assignments, leaveRecords: p.leaveRecords ?? [] }
+        : null)
+    }
+    setMarkSickTarget(null)
+    showToast('success', `Sick leave recorded for ${markSickTarget.employeeName}`)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Calendar data builders
+  // ---------------------------------------------------------------------------
+
   function buildCalShifts(state: ScheduleState) {
     const byShift: Record<string, ScheduleAssignment[]> = {}
     for (const a of state.assignments) {
@@ -442,7 +645,31 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
   }
 
   const draftCalShifts     = useMemo(() => draftState     ? buildCalShifts(draftState)     : [], [draftState, employeeMap])
-  const publishedCalShifts = useMemo(() => publishedState ? buildCalShifts(publishedState) : [], [publishedState, employeeMap])
+  const publishedCalShifts = useMemo(() => {
+    if (!publishedState) return []
+    return buildCalShifts(publishedState)
+  }, [publishedState, employeeMap])
+
+  // Compute which published shift IDs have at least one guard on approved leave
+  const needsCoverShiftIds = useMemo(() => {
+    if (!publishedState) return new Set<string>()
+    const leaveRecords = publishedState.leaveRecords ?? []
+    const ids = new Set<string>()
+    for (const s of publishedState.shifts) {
+      const byShift = publishedState.assignments.filter(a => a.shift_id === s.id)
+      const guardIds = byShift.map(a => a.employee_id)
+      const leaveGuards = getLeaveGuardsForDate(leaveRecords, s.date)
+      if (guardIds.some(id => leaveGuards.has(id))) {
+        ids.add(s.id)
+      }
+    }
+    return ids
+  }, [publishedState])
+
+  // Calendar defaultDate derived from selected month
+  const calendarDefaultDate = useMemo(() => {
+    try { return parseISO(`${month}-01`) } catch { return new Date() }
+  }, [month])
 
   const displayMonth = formatMonthDisplay(month)
 
@@ -471,6 +698,16 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Mark sick modal */}
+      {markSickTarget && (
+        <MarkSickModal
+          employeeName={markSickTarget.employeeName}
+          defaultDate={markSickTarget.shiftDate}
+          onConfirm={handleMarkSickConfirm}
+          onCancel={() => setMarkSickTarget(null)}
+        />
       )}
 
       {/* Controls */}
@@ -550,9 +787,23 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
             <span className="text-xs text-gray-500">
               Published {format(parseISO(publishedState.run.generated_at), "MMM d, yyyy 'at' HH:mm")}
             </span>
+            {publishedState.run.last_edited_at && (
+              <span className="text-xs text-blue-600 font-medium">
+                · Last updated {format(parseISO(publishedState.run.last_edited_at), "MMM d 'at' HH:mm")}
+              </span>
+            )}
             {!draftState && (
               <span className="text-xs text-gray-400 italic">This is the live schedule</span>
             )}
+            {needsCoverShiftIds.size > 0 && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-100 border border-red-300 text-red-800 text-xs font-semibold rounded-full">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+                {needsCoverShiftIds.size} shift{needsCoverShiftIds.size !== 1 ? 's' : ''} need cover
+              </span>
+            )}
+            <span className="text-xs text-gray-400 italic ml-1">Click a shift to edit</span>
             <button
               onClick={handleDownloadPDF}
               disabled={isDownloadingPDF}
@@ -585,6 +836,9 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
                 requestedShiftIds={[]}
                 assignedShiftIds={[]}
                 draftMode={true}
+                defaultDate={calendarDefaultDate}
+                needsCoverShiftIds={needsCoverShiftIds}
+                onDraftSlotClick={(shift) => setSelectedPublishedShift(shift)}
               />
             </div>
             <SummaryPanel
@@ -627,6 +881,7 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
                 requestedShiftIds={[]}
                 assignedShiftIds={[]}
                 draftMode={true}
+                defaultDate={calendarDefaultDate}
                 onDraftSlotClick={(shift) => setSelectedDraftShift(shift)}
               />
             </div>
@@ -641,12 +896,13 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
         </>
       )}
 
-      {/* Slot-fill panel (draft only) */}
+      {/* Draft slot-fill panel */}
       {selectedDraftShift && draftState && (
         <SlotPanel
           shift={selectedDraftShift as any}
           runId={draftState.run.id}
           employeeMap={employeeMap}
+          mode="draft"
           assignedGuardIds={
             draftState.assignments
               .filter(a => a.shift_id === selectedDraftShift.id)
@@ -655,6 +911,31 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
           onClose={() => setSelectedDraftShift(null)}
           onAssign={(employeeId) => handleDraftAssign(selectedDraftShift.id, employeeId)}
           onUnassign={(employeeId) => handleDraftUnassign(selectedDraftShift.id, employeeId)}
+        />
+      )}
+
+      {/* Published slot-fill panel */}
+      {selectedPublishedShift && publishedState && (
+        <SlotPanel
+          shift={selectedPublishedShift as any}
+          runId={publishedState.run.id}
+          employeeMap={employeeMap}
+          mode="published"
+          assignedGuardIds={
+            publishedState.assignments
+              .filter(a => a.shift_id === selectedPublishedShift.id)
+              .map(a => a.employee_id)
+          }
+          sickGuardIds={getLeaveGuardsForDate(
+            publishedState.leaveRecords ?? [],
+            selectedPublishedShift.date,
+          )}
+          onClose={() => setSelectedPublishedShift(null)}
+          onAssign={(employeeId) => handlePublishedAssign(selectedPublishedShift.id, employeeId)}
+          onUnassign={(employeeId) => handlePublishedUnassign(selectedPublishedShift.id, employeeId)}
+          onMarkSick={(employeeId, employeeName) =>
+            setMarkSickTarget({ employeeId, employeeName, shiftDate: selectedPublishedShift.date })
+          }
         />
       )}
     </div>

@@ -36,7 +36,7 @@ export async function GET(request: Request) {
 
   const { data: runs } = await admin
     .from('schedule_runs')
-    .select('id, period_start, period_end, status, generated_at, fairness_summary, parameters_snapshot')
+    .select('id, period_start, period_end, status, generated_at, last_edited_at, fairness_summary, parameters_snapshot')
     .eq('period_start', periodStart)
     .eq('period_end', periodEnd)
     .eq('status', 'published')
@@ -73,9 +73,18 @@ export async function GET(request: Request) {
     assignment_count: countMap[s.id] ?? 0,
   }))
 
+  // Approved leave overlapping this period (for sick/absent flagging on the published view)
+  const { data: leaveRaw } = await admin
+    .from('time_off')
+    .select('id, employee_id, start_date, end_date, type')
+    .eq('status', 'approved')
+    .lte('start_date', periodEnd)
+    .gte('end_date', periodStart)
+
   return NextResponse.json({
     run,
     shifts: shiftsWithCounts,
     assignments: assignments ?? [],
+    leaveRecords: leaveRaw ?? [],
   })
 }

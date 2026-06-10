@@ -31,6 +31,10 @@ interface ShiftCalendarClientProps {
   draftMode?: boolean
   /** Draft mode only — called when a shift pill is clicked, instead of opening the internal modal */
   onDraftSlotClick?: (shift: Shift) => void
+  /** Calendar opens on this date instead of today */
+  defaultDate?: Date
+  /** Shift IDs that have at least one guard on approved leave — shown with red 'needs cover' indicator */
+  needsCoverShiftIds?: Set<string>
 }
 
 const SHIFT_COLORS: Record<string, string> = {
@@ -76,6 +80,8 @@ export default function ShiftCalendarClient({
   allEmployees = [],
   draftMode = false,
   onDraftSlotClick,
+  defaultDate,
+  needsCoverShiftIds,
 }: ShiftCalendarClientProps) {
   const router = useRouter()
   const [dashboardTab, setDashboardTab] = useState<'available' | 'schedule'>(
@@ -257,7 +263,13 @@ export default function ShiftCalendarClient({
         {shiftsForDay.map((shift) => {
           const count = (shift as any).assignment_count ?? 0
           const headcount = (shift as any).headcount ?? 1
-          const bgColor = count === 0 ? '#ef4444' : count < headcount ? '#f59e0b' : '#16a34a'
+          const needsCover = needsCoverShiftIds?.has(shift.id) ?? false
+          // Needs-cover overrides normal amber/green — use solid red outline style
+          const bgColor = needsCover
+            ? '#dc2626'
+            : count === 0 ? '#ef4444'
+            : count < headcount ? '#f59e0b'
+            : '#16a34a'
           const label = { morning: 'M', evening: 'E', night: 'N' }[shift.shift_type] ?? '?'
           return (
             <div
@@ -272,17 +284,21 @@ export default function ShiftCalendarClient({
                   setAssignOverride(false)
                 }
               }}
-              style={{ backgroundColor: bgColor }}
+              style={{
+                backgroundColor: bgColor,
+                boxShadow: needsCover ? '0 0 0 1.5px #991b1b' : undefined,
+              }}
               className="flex items-center justify-between text-white text-[10px] font-semibold px-1 py-0.5 rounded cursor-pointer hover:opacity-90 transition-opacity"
+              title={needsCover ? 'Needs cover — guard on leave' : undefined}
             >
-              <span>{label}</span>
+              <span>{label}{needsCover ? ' ⚑' : ''}</span>
               <span>{count}/{headcount}</span>
             </div>
           )
         })}
       </div>
     )
-  }, [onDraftSlotClick]) // onDraftSlotClick added; setters are stable
+  }, [onDraftSlotClick, needsCoverShiftIds])
 
   return (
     <div>
@@ -347,6 +363,7 @@ export default function ShiftCalendarClient({
                 localizer={localizer}
                 events={scheduleEvents}
                 defaultView={Views.MONTH}
+                defaultDate={defaultDate}
                 style={{ height: '100%' }}
                 eventPropGetter={scheduleEventStyleGetter}
                 onSelectEvent={(event: CalEvent) => setSelectedShift(event.resource)}
@@ -421,6 +438,7 @@ export default function ShiftCalendarClient({
             localizer={localizer}
             events={draftMode ? draftDayEvents : events}
             defaultView={Views.MONTH}
+            defaultDate={defaultDate}
             style={{ height: '100%' }}
             eventPropGetter={draftMode ? draftEventPropGetter : eventStyleGetter}
             components={draftMode ? { event: DraftDayEvent as any } : { event: CustomEvent as any }}

@@ -27,6 +27,7 @@ export async function GET(request: Request) {
   const run_id    = url.searchParams.get('run_id')
   const date      = url.searchParams.get('date')
   const shiftType = url.searchParams.get('shift_type')
+  const mode      = url.searchParams.get('mode') ?? 'draft'
 
   if (!run_id || !date || !shiftType) {
     return NextResponse.json({ error: 'run_id, date, shift_type required' }, { status: 400 })
@@ -37,13 +38,16 @@ export async function GET(request: Request) {
   if (!['morning', 'evening', 'night'].includes(shiftType)) {
     return NextResponse.json({ error: 'shift_type must be morning | evening | night' }, { status: 400 })
   }
+  if (!['draft', 'published'].includes(mode)) {
+    return NextResponse.json({ error: 'mode must be draft | published' }, { status: 400 })
+  }
 
   const admin = createAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 
-  // Verify run exists and is draft
+  // Verify run exists and matches expected status
   const { data: run } = await admin
     .from('schedule_runs')
     .select('id, status, period_start, period_end')
@@ -51,7 +55,7 @@ export async function GET(request: Request) {
     .single()
 
   if (!run) return NextResponse.json({ error: 'Schedule run not found' }, { status: 404 })
-  if (run.status !== 'draft') return NextResponse.json({ error: 'Schedule run is not a draft' }, { status: 409 })
+  if (run.status !== mode) return NextResponse.json({ error: `Schedule run is not ${mode}` }, { status: 409 })
 
   // All employees (active, role=employee)
   const { data: employeesRaw } = await admin
@@ -62,12 +66,12 @@ export async function GET(request: Request) {
 
   const employees: Employee[] = employeesRaw ?? []
 
-  // All draft assignments for this run
+  // All assignments for this run (draft or published depending on mode)
   const { data: assignmentsRaw } = await admin
     .from('shift_assignments')
     .select('id, employee_id, shift_id')
     .eq('schedule_run_id', run_id)
-    .eq('status', 'draft')
+    .eq('status', mode)
 
   // Shifts for the run period — needed to map shift_id → date + shift_type
   const { data: shiftsRaw } = await admin
