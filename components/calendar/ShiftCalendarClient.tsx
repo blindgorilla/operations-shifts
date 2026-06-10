@@ -29,6 +29,8 @@ interface ShiftCalendarClientProps {
   allEmployees?: { id: string; name: string }[]
   /** When true: calendar shows draft assignments read-only; no request/assign UI */
   draftMode?: boolean
+  /** Draft mode only — called when a shift pill is clicked, instead of opening the internal modal */
+  onDraftSlotClick?: (shift: Shift) => void
 }
 
 const SHIFT_COLORS: Record<string, string> = {
@@ -73,6 +75,7 @@ export default function ShiftCalendarClient({
   employeeCoverage,
   allEmployees = [],
   draftMode = false,
+  onDraftSlotClick,
 }: ShiftCalendarClientProps) {
   const router = useRouter()
   const [dashboardTab, setDashboardTab] = useState<'available' | 'schedule'>(
@@ -261,9 +264,13 @@ export default function ShiftCalendarClient({
               key={shift.id}
               onClick={(e) => {
                 e.stopPropagation()
-                setSelectedShift(shift)
-                setSelectedEmployeeId('')
-                setAssignOverride(false)
+                if (onDraftSlotClick) {
+                  onDraftSlotClick(shift)
+                } else {
+                  setSelectedShift(shift)
+                  setSelectedEmployeeId('')
+                  setAssignOverride(false)
+                }
               }}
               style={{ backgroundColor: bgColor }}
               className="flex items-center justify-between text-white text-[10px] font-semibold px-1 py-0.5 rounded cursor-pointer hover:opacity-90 transition-opacity"
@@ -275,7 +282,7 @@ export default function ShiftCalendarClient({
         })}
       </div>
     )
-  }, []) // setSelectedShift/setSelectedEmployeeId/setAssignOverride are stable state setters
+  }, [onDraftSlotClick]) // onDraftSlotClick added; setters are stable
 
   return (
     <div>
