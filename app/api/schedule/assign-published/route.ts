@@ -251,10 +251,11 @@ export async function POST(request: Request) {
   }
 
   // Stamp last_edited_at
+  const last_edited_at = new Date().toISOString()
   await admin
     .from('schedule_runs')
-    .update({ last_edited_at: new Date().toISOString() })
+    .update({ last_edited_at })
     .eq('id', run_id)
 
-  return NextResponse.json({ assignment: inserted, rule_reason })
+  return NextResponse.json({ assignment: inserted, rule_reason, last_edited_at })
 }

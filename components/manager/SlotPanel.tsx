@@ -37,8 +37,8 @@ interface Props {
   /** 'draft' uses assign/unassign-draft; 'published' uses assign/unassign-published */
   mode?: 'draft' | 'published'
   onClose: () => void
-  onAssign: (employeeId: string, employeeName: string) => void
-  onUnassign: (employeeId: string) => void
+  onAssign: (employeeId: string, employeeName: string, lastEditedAt?: string) => void
+  onUnassign: (employeeId: string, lastEditedAt?: string) => void
   onMarkSick?: (employeeId: string, employeeName: string) => void
 }
 
@@ -140,9 +140,9 @@ export default function SlotPanel({
       }
       // If a replace happened, unassign the replaced guard from optimistic state
       if (mode === 'published' && replaceTarget) {
-        onUnassign(replaceTarget)
+        onUnassign(replaceTarget, data.last_edited_at)
       }
-      onAssign(employeeId, employeeName)
+      onAssign(employeeId, employeeName, data.last_edited_at)
       await fetchCandidates()
     } catch {
       setActionError('Network error')
@@ -169,7 +169,7 @@ export default function SlotPanel({
         setActionError(data.error ?? 'Failed to remove')
         return
       }
-      onUnassign(employeeId)
+      onUnassign(employeeId, data.last_edited_at)
       await fetchCandidates()
     } catch {
       setActionError('Network error')

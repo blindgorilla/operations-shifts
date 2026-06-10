@@ -261,9 +261,13 @@ export default function ShiftCalendarClient({
     return (
       <div className="flex flex-col gap-0.5 p-0.5">
         {shiftsForDay.map((shift) => {
-          const count = (shift as any).assignment_count ?? 0
-          const headcount = (shift as any).headcount ?? 1
+          const rawCount = (shift as any).assignment_count ?? 0
           const needsCover = needsCoverShiftIds?.has(shift.id) ?? false
+          // Use effective count (on-leave guards excluded) when needs-cover so pill agrees with SlotPanel
+          const count = needsCover
+            ? ((shift as any).effective_assignment_count ?? rawCount)
+            : rawCount
+          const headcount = (shift as any).headcount ?? 1
           // Needs-cover overrides normal amber/green — use solid red outline style
           const bgColor = needsCover
             ? '#dc2626'

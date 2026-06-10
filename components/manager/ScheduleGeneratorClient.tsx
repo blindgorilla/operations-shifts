@@ -445,7 +445,7 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
   // Published optimistic updates
   // ---------------------------------------------------------------------------
 
-  const handlePublishedAssign = useCallback((shiftId: string, employeeId: string) => {
+  const handlePublishedAssign = useCallback((shiftId: string, employeeId: string, lastEditedAt?: string) => {
     setPublishedState(prev => {
       if (!prev) return prev
       const newAssignments = [
@@ -455,7 +455,12 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
       const newShifts = prev.shifts.map((s: any) =>
         s.id === shiftId ? { ...s, assignment_count: (s.assignment_count ?? 0) + 1 } : s,
       )
-      return { ...prev, assignments: newAssignments, shifts: newShifts }
+      return {
+        ...prev,
+        assignments: newAssignments,
+        shifts: newShifts,
+        run: lastEditedAt ? { ...prev.run, last_edited_at: lastEditedAt } : prev.run,
+      }
     })
     setSelectedPublishedShift(prev =>
       prev?.id === shiftId
@@ -464,7 +469,7 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
     )
   }, [])
 
-  const handlePublishedUnassign = useCallback((shiftId: string, employeeId: string) => {
+  const handlePublishedUnassign = useCallback((shiftId: string, employeeId: string, lastEditedAt?: string) => {
     setPublishedState(prev => {
       if (!prev) return prev
       const newAssignments = prev.assignments.filter(
@@ -473,7 +478,12 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
       const newShifts = prev.shifts.map((s: any) =>
         s.id === shiftId ? { ...s, assignment_count: Math.max(0, (s.assignment_count ?? 0) - 1) } : s,
       )
-      return { ...prev, assignments: newAssignments, shifts: newShifts }
+      return {
+        ...prev,
+        assignments: newAssignments,
+        shifts: newShifts,
+        run: lastEditedAt ? { ...prev.run, last_edited_at: lastEditedAt } : prev.run,
+      }
     })
     setSelectedPublishedShift(prev =>
       prev?.id === shiftId
@@ -645,23 +655,28 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
   }
 
   const draftCalShifts     = useMemo(() => draftState     ? buildCalShifts(draftState)     : [], [draftState, employeeMap])
+  // publishedCalShifts: same as draft but also annotates effective_assignment_count
+  // (raw count minus on-leave guards) so the calendar pill agrees with SlotPanel.
   const publishedCalShifts = useMemo(() => {
     if (!publishedState) return []
-    return buildCalShifts(publishedState)
+    const leaveRecords = publishedState.leaveRecords ?? []
+    const base = buildCalShifts(publishedState)
+    return base.map((s: any) => {
+      const leaveGuards = getLeaveGuardsForDate(leaveRecords, s.date)
+      const onLeaveCount = (s.assigned_employee_ids as string[]).filter(id => leaveGuards.has(id)).length
+      return { ...s, effective_assignment_count: s.assignment_count - onLeaveCount }
+    })
   }, [publishedState, employeeMap])
 
-  // Compute which published shift IDs have at least one guard on approved leave
+  // Shift IDs with at least one guard on approved leave — same overlap check as above
   const needsCoverShiftIds = useMemo(() => {
     if (!publishedState) return new Set<string>()
     const leaveRecords = publishedState.leaveRecords ?? []
     const ids = new Set<string>()
     for (const s of publishedState.shifts) {
-      const byShift = publishedState.assignments.filter(a => a.shift_id === s.id)
-      const guardIds = byShift.map(a => a.employee_id)
+      const guardIds = publishedState.assignments.filter(a => a.shift_id === s.id).map(a => a.employee_id)
       const leaveGuards = getLeaveGuardsForDate(leaveRecords, s.date)
-      if (guardIds.some(id => leaveGuards.has(id))) {
-        ids.add(s.id)
-      }
+      if (guardIds.some(id => leaveGuards.has(id))) ids.add(s.id)
     }
     return ids
   }, [publishedState])
@@ -931,8 +946,8 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
             selectedPublishedShift.date,
           )}
           onClose={() => setSelectedPublishedShift(null)}
-          onAssign={(employeeId) => handlePublishedAssign(selectedPublishedShift.id, employeeId)}
-          onUnassign={(employeeId) => handlePublishedUnassign(selectedPublishedShift.id, employeeId)}
+          onAssign={(employeeId, _name, lastEditedAt) => handlePublishedAssign(selectedPublishedShift.id, employeeId, lastEditedAt)}
+          onUnassign={(employeeId, lastEditedAt) => handlePublishedUnassign(selectedPublishedShift.id, employeeId, lastEditedAt)}
           onMarkSick={(employeeId, employeeName) =>
             setMarkSickTarget({ employeeId, employeeName, shiftDate: selectedPublishedShift.date })
           }
