@@ -11,6 +11,7 @@ export default function ManagerHolidaysClient({ holidays: initial }: Props) {
   const [holidays, setHolidays] = useState(initial)
   const [date, setDate] = useState('')
   const [name, setName] = useState('')
+  const [isHighHoliday, setIsHighHoliday] = useState(false)
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
@@ -25,7 +26,7 @@ export default function ManagerHolidaysClient({ holidays: initial }: Props) {
     const supabase = createClient()
     const { data, error } = await supabase
       .from('public_holidays')
-      .insert({ date, name })
+      .insert({ date, name, is_high_holiday: isHighHoliday })
       .select()
       .single()
 
@@ -38,6 +39,7 @@ export default function ManagerHolidaysClient({ holidays: initial }: Props) {
     setHolidays((prev) => [...prev, data].sort((a, b) => a.date.localeCompare(b.date)))
     setDate('')
     setName('')
+    setIsHighHoliday(false)
     showToast('success', 'Holiday added')
   }
 
@@ -59,13 +61,13 @@ export default function ManagerHolidaysClient({ holidays: initial }: Props) {
       {/* Add form */}
       <form onSubmit={addHoliday} className="bg-white border border-gray-200 rounded-xl p-4">
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Add Public Holiday</h2>
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           <input
             type="date"
             required
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 min-w-[140px] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <input
             type="text"
@@ -73,8 +75,21 @@ export default function ManagerHolidaysClient({ holidays: initial }: Props) {
             placeholder="Holiday name (e.g. National Day)"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="flex-[2] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-[2] min-w-[180px] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+          <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-gray-700 px-1">
+            <span className="relative inline-flex items-center">
+              <input
+                type="checkbox"
+                checked={isHighHoliday}
+                onChange={(e) => setIsHighHoliday(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-gray-200 peer-checked:bg-purple-600 rounded-full transition-colors" />
+              <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4" />
+            </span>
+            High holiday
+          </label>
           <button
             type="submit"
             disabled={loading}
@@ -102,7 +117,16 @@ export default function ManagerHolidaysClient({ holidays: initial }: Props) {
               {holidays.map((h) => (
                 <tr key={h.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium">{format(parseISO(h.date), 'EEEE, d MMMM yyyy')}</td>
-                  <td className="px-4 py-3 text-gray-700">{h.name}</td>
+                  <td className="px-4 py-3 text-gray-700">
+                    <span className="inline-flex items-center gap-2">
+                      {h.name}
+                      {h.is_high_holiday && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">
+                          High
+                        </span>
+                      )}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => deleteHoliday(h.id)}

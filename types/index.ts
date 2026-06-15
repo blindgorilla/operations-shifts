@@ -86,8 +86,16 @@ export interface PublicHoliday {
   id: string
   date: string
   name: string
+  is_high_holiday: boolean
   created_by: string | null
   created_at: string
+}
+
+export interface HolidayWorkRow {
+  employee_id: string
+  employee_name: string
+  holidays_worked: number
+  high_holidays_worked: number
 }
 
 export interface EmployeeWeekendStats {
