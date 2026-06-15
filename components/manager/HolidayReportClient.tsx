@@ -53,38 +53,16 @@ export default function HolidayReportClient({ initialYear, initialMonth, initial
     fetchReport(year, m)
   }
 
-  const [csvLoading, setCsvLoading] = useState(false)
-  const [csvError, setCsvError] = useState<string | null>(null)
-
   const totalHolidays = rows.reduce((s, r) => s + r.holidays_worked, 0)
   const totalHighHolidays = rows.reduce((s, r) => s + r.high_holidays_worked, 0)
 
-  async function downloadCsv() {
-    setCsvLoading(true)
-    setCsvError(null)
-    const res = await fetch(`/api/holiday-report-detail?year=${year}&month=${month}`)
-    setCsvLoading(false)
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      setCsvError(body.error ?? 'Failed to fetch detail report')
-      return
-    }
-    const detail: Array<{
-      employee_name: string
-      shift_date: string
-      shift_type: string
-      holiday_name: string
-      is_high_holiday: boolean
-    }> = await res.json()
-
-    const header = 'Employee,Date,Shift Type,Holiday Name,High Holiday'
-    const dataRows = detail.map((r) => {
-      const [y, mo, d] = r.shift_date.split('-')
-      const date = `${d}/${mo}/${y}`
-      const highHoliday = r.is_high_holiday ? 'Yes' : 'No'
-      return `"${r.employee_name}",${date},"${r.shift_type}","${r.holiday_name}",${highHoliday}`
-    })
-    const csv = [header, ...dataRows].join('\n')
+  function downloadCsv() {
+    const header = 'Employee,Holidays Worked,High Holidays Worked'
+    const dataRows = rows.map(
+      (r) => `"${r.employee_name}",${r.holidays_worked},${r.high_holidays_worked}`
+    )
+    const totalsRow = `"TOTAL",${totalHolidays},${totalHighHolidays}`
+    const csv = [header, ...dataRows, totalsRow].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -120,21 +98,15 @@ export default function HolidayReportClient({ initialYear, initialMonth, initial
         </select>
         <button
           onClick={downloadCsv}
-          disabled={loading || csvLoading || rows.length === 0}
+          disabled={loading || rows.length === 0}
           className="ml-auto flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-900 disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
-          {csvLoading ? 'Preparing…' : 'Download CSV'}
+          Download CSV
         </button>
       </div>
-
-      {csvError && (
-        <div className="px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
-          {csvError}
-        </div>
-      )}
 
       {error && (
         <div className="px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
