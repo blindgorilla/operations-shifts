@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar'
 import { format, parse, startOfWeek, getDay, parseISO } from 'date-fns'
 import { enUS } from 'date-fns/locale/en-US'
-import type { Shift, Employee, RuleViolation } from '@/types'
+import type { Shift, Employee, RuleViolation, PublicHoliday } from '@/types'
 import ShiftCard from '@/components/shifts/ShiftCard'
 import InfoTooltip from '@/components/ui/InfoTooltip'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
@@ -35,6 +35,8 @@ interface ShiftCalendarClientProps {
   defaultDate?: Date
   /** Shift IDs that have at least one guard on approved leave — shown with red 'needs cover' indicator */
   needsCoverShiftIds?: Set<string>
+  /** Public holidays to mark on the calendar */
+  holidays?: PublicHoliday[]
 }
 
 const SHIFT_COLORS: Record<string, string> = {
@@ -82,6 +84,7 @@ export default function ShiftCalendarClient({
   onDraftSlotClick,
   defaultDate,
   needsCoverShiftIds,
+  holidays,
 }: ShiftCalendarClientProps) {
   const router = useRouter()
   const [dashboardTab, setDashboardTab] = useState<'available' | 'schedule'>(
@@ -255,6 +258,37 @@ export default function ShiftCalendarClient({
     style: { backgroundColor: 'transparent', border: 'none', boxShadow: 'none', padding: 0, margin: '1px 0' } as React.CSSProperties,
   }), [])
 
+  // ---------------------------------------------------------------------------
+  // Holiday markers
+  // ---------------------------------------------------------------------------
+
+  const holidayMap = useMemo(() => {
+    const map = new Map<string, PublicHoliday>()
+    for (const h of holidays ?? []) map.set(h.date, h)
+    return map
+  }, [holidays])
+
+  const holidayDayPropGetter = useCallback((date: Date) => {
+    const holiday = holidayMap.get(format(date, 'yyyy-MM-dd'))
+    if (!holiday) return {}
+    return { className: holiday.is_high_holiday ? 'rbc-day-high-holiday' : 'rbc-day-holiday' }
+  }, [holidayMap])
+
+  const CustomDateHeader = useCallback(({ label, date }: { label: string; date: Date }) => {
+    const holiday = holidayMap.get(format(date, 'yyyy-MM-dd'))
+    return (
+      <span>
+        {label}
+        {holiday && (
+          <span
+            className={`holiday-dot${holiday.is_high_holiday ? ' holiday-dot--high' : ''}`}
+            title={holiday.name}
+          />
+        )}
+      </span>
+    )
+  }, [holidayMap])
+
   // Compact M/E/N rows rendered inside each day cell in draft mode.
   const DraftDayEvent = useCallback(({ event }: { event: any }) => {
     const shiftsForDay: Shift[] = event?.resource?.shiftsForDay ?? []
@@ -306,6 +340,16 @@ export default function ShiftCalendarClient({
 
   return (
     <div>
+      <style>{`
+        /* ---- HOLIDAY MARKER COLORS (tweak here) ---- */
+        .rbc-day-holiday      { background-color: #FFF8EC !important; }  /* faint cream */
+        .rbc-day-high-holiday { background-color: #FDEDCB !important; }  /* warmer gold */
+        .holiday-dot          { width:6px; height:6px; border-radius:9999px;
+                                display:inline-block; margin-left:5px;
+                                vertical-align:middle; background:#C99A2E; }  /* muted gold */
+        .holiday-dot--high    { background:#B45309; }  /* deeper gold = high holiday */
+      `}</style>
+
       {/* Toast */}
       {toast && (
         <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium text-white transition-all ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
@@ -370,6 +414,8 @@ export default function ShiftCalendarClient({
                 defaultDate={defaultDate}
                 style={{ height: '100%' }}
                 eventPropGetter={scheduleEventStyleGetter}
+                dayPropGetter={holidayDayPropGetter}
+                components={{ month: { dateHeader: CustomDateHeader } }}
                 onSelectEvent={(event: CalEvent) => setSelectedShift(event.resource)}
               />
             </div>
@@ -445,7 +491,12 @@ export default function ShiftCalendarClient({
             defaultDate={defaultDate}
             style={{ height: '100%' }}
             eventPropGetter={draftMode ? draftEventPropGetter : eventStyleGetter}
-            components={draftMode ? { event: DraftDayEvent as any } : { event: CustomEvent as any }}
+            dayPropGetter={holidayDayPropGetter}
+            components={
+              draftMode
+                ? { event: DraftDayEvent as any, month: { dateHeader: CustomDateHeader } }
+                : { event: CustomEvent as any, month: { dateHeader: CustomDateHeader } }
+            }
             onSelectEvent={draftMode ? () => {} : (event: CalEvent) => {
               setSelectedShift(event.resource)
               setSelectedEmployeeId('')

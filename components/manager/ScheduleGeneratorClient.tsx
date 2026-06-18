@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { format, parseISO, addMonths, isWithinInterval } from 'date-fns'
 import ShiftCalendarClient from '@/components/calendar/ShiftCalendarClient'
 import SlotPanel from '@/components/manager/SlotPanel'
-import type { Employee, Shift } from '@/types'
+import { createClient } from '@/lib/supabase/client'
+import type { Employee, Shift, PublicHoliday } from '@/types'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -383,6 +384,7 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
   const [showPublishConfirm, setShowPublishConfirm] = useState(false)
   const [draftState, setDraftState] = useState<ScheduleState | null>(null)
   const [publishedState, setPublishedState] = useState<ScheduleState | null>(null)
+  const [holidays, setHolidays] = useState<PublicHoliday[]>([])
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [selectedDraftShift, setSelectedDraftShift] = useState<Shift | null>(null)
   const [selectedPublishedShift, setSelectedPublishedShift] = useState<Shift | null>(null)
@@ -522,6 +524,25 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
     }
 
     fetchBoth()
+    return () => { cancelled = true }
+  }, [month])
+
+  useEffect(() => {
+    let cancelled = false
+    const year = Number(month.slice(0, 4))
+
+    async function fetchHolidays() {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('public_holidays')
+        .select('*')
+        .gte('date', `${year}-01-01`)
+        .lt('date', `${year + 1}-01-01`)
+        .order('date')
+      if (!cancelled) setHolidays(data ?? [])
+    }
+
+    fetchHolidays()
     return () => { cancelled = true }
   }, [month])
 
@@ -853,6 +874,7 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
                 draftMode={true}
                 defaultDate={calendarDefaultDate}
                 needsCoverShiftIds={needsCoverShiftIds}
+                holidays={holidays}
                 onDraftSlotClick={(shift) => setSelectedPublishedShift(shift)}
               />
             </div>
@@ -897,6 +919,7 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
                 assignedShiftIds={[]}
                 draftMode={true}
                 defaultDate={calendarDefaultDate}
+                holidays={holidays}
                 onDraftSlotClick={(shift) => setSelectedDraftShift(shift)}
               />
             </div>
