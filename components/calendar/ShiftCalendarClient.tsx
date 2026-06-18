@@ -341,13 +341,13 @@ export default function ShiftCalendarClient({
   return (
     <div>
       <style>{`
-        /* ---- HOLIDAY MARKER COLORS (tweak here) ---- */
-        .rbc-day-holiday      { background-color: #FFF8EC !important; }  /* faint cream */
-        .rbc-day-high-holiday { background-color: #FDEDCB !important; }  /* warmer gold */
+        /* ---- HOLIDAY MARKER COLORS (violet) ---- */
+        .rbc-day-holiday      { background-color: #F1EFFB !important; }  /* faint lavender */
+        .rbc-day-high-holiday { background-color: #DCD8F4 !important; }  /* stronger lavender */
         .holiday-dot          { width:6px; height:6px; border-radius:9999px;
                                 display:inline-block; margin-left:5px;
-                                vertical-align:middle; background:#C99A2E; }  /* muted gold */
-        .holiday-dot--high    { background:#B45309; }  /* deeper gold = high holiday */
+                                vertical-align:middle; background:#7F77DD; }  /* mid violet */
+        .holiday-dot--high    { background:#534AB7; }  /* deep violet = high holiday */
       `}</style>
 
       {/* Toast */}
