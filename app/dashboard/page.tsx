@@ -30,6 +30,14 @@ export default async function DashboardPage() {
 
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+  const year = now.getFullYear()
+
+  const { data: holidays } = await supabase
+    .from('public_holidays')
+    .select('*')
+    .gte('date', `${year}-01-01`)
+    .lt('date', `${year + 1}-01-01`)
+    .order('date')
 
   const { data: shifts } = await supabase
     .from('shifts')
@@ -110,6 +118,7 @@ export default async function DashboardPage() {
           weeklyAssignedCount={weeklyAssignedCount}
           weeklyRequired={5}
           allEmployees={[]}
+          holidays={holidays ?? []}
         />
       </main>
     </div>
