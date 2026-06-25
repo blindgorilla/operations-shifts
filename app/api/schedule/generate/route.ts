@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { format, getDaysInMonth, addDays, parseISO, getDay } from 'date-fns'
 import { generateSchedule } from '@/lib/scheduler/generateSchedule'
 import { emptyCounters } from '@/lib/scheduler/counters'
-import type { CoverageRequirement, TimeOff, FairnessSummary, EmployeeFairnessCounters } from '@/lib/scheduler/types'
+import type { CoverageRequirement, TimeOff, FairnessSummary, EmployeeFairnessCounters, PinnedAssignment } from '@/lib/scheduler/types'
 import type { Employee, SchedulingRule } from '@/types'
 
 // ---------------------------------------------------------------------------
@@ -157,6 +157,22 @@ export async function POST(request: Request) {
     .lte('date', periodEnd)
 
   const publicHolidays: string[] = (rawHolidays ?? []).map((h: { date: string }) => h.date)
+
+  // 2d-2. Pinned (guaranteed) assignments for the target month
+  const { data: rawPins } = await admin
+    .from('pinned_assignments')
+    .select('employee_id, date, shift_type')
+    .gte('date', periodStart)
+    .lte('date', periodEnd)
+
+  const activeEmployeeIds = new Set(employees.map((e) => e.id))
+  const pinnedAssignments: PinnedAssignment[] = (rawPins ?? [])
+    .filter((p: any) => activeEmployeeIds.has(p.employee_id))
+    .map((p: any) => ({
+      employee_id: p.employee_id,
+      date:        p.date,
+      shift_type:  p.shift_type,
+    }))
 
   // 2e. Enabled scheduling rules (with is_hard, weight, parameters)
   const { data: rawRules } = await admin
@@ -353,9 +369,10 @@ export async function POST(request: Request) {
     timeOff,
     rules,
     carryForwardCounters,
+    pinnedAssignments,
   })
 
-  const { assignments, fairnessSummary, unfilledSlots } = result
+  const { assignments, fairnessSummary, unfilledSlots, unplaceablePins } = result
 
   // ── 5. Write outputs ───────────────────────────────────────────────────────
 
@@ -368,7 +385,7 @@ export async function POST(request: Request) {
       status:              'draft',
       generated_by:        user.id,
       fairness_summary:    fairnessSummary,
-      parameters_snapshot: { unfilled_slots: unfilledSlots, month },
+      parameters_snapshot: { unfilled_slots: unfilledSlots, unplaceable_pins: unplaceablePins ?? [], month },
     })
     .select('id')
     .single()
@@ -388,7 +405,7 @@ export async function POST(request: Request) {
       shift_id:         shiftId,
       schedule_run_id:  runId,
       status:           'draft',
-      locked:           false,
+      locked:           a.pinned === true,
       assigned_by:      user.id,
     }]
   })
@@ -411,6 +428,7 @@ export async function POST(request: Request) {
     month,
     assignment_count: assignmentRows.length,
     unfilled_slots:   unfilledSlots,
+    unplaceable_pins: unplaceablePins ?? [],
     fairness_summary: fairnessSummary,
   })
 }

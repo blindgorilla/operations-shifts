@@ -29,6 +29,20 @@ export interface GeneratedAssignment {
   shift_type: ShiftType
   day_type: DayType
   reason: string
+  pinned?: boolean
+}
+
+export interface PinnedAssignment {
+  employee_id: string
+  date: string // yyyy-MM-dd
+  shift_type: ShiftType
+}
+
+export interface UnplaceablePin {
+  employee_id: string
+  date: string // yyyy-MM-dd
+  shift_type: ShiftType
+  reason: string
 }
 
 export interface EmployeeFairnessCounters {
@@ -53,10 +67,13 @@ export interface GeneratorInputs {
   rules: SchedulingRule[]
   /** Fairness counters carried forward from prior months for multi-month fairness. */
   carryForwardCounters?: FairnessSummary
+  /** Guaranteed (employee, date, shift_type) pre-assignments, seeded before the greedy pass. */
+  pinnedAssignments?: PinnedAssignment[]
 }
 
 export interface GeneratorOutput {
   assignments: GeneratedAssignment[]
   fairnessSummary: FairnessSummary
   unfilledSlots: Slot[]
+  unplaceablePins?: UnplaceablePin[]
 }

@@ -7,6 +7,8 @@ import type {
   FairnessSummary,
   EmployeeFairnessCounters,
   TimeOff,
+  PinnedAssignment,
+  UnplaceablePin,
 } from './types'
 import { buildSlots } from './buildSlots'
 import { isEligible } from './eligibility'
@@ -104,6 +106,7 @@ function repairPass(
       for (let j = i + 1; j < assignments.length; j++) {
         const a1 = assignments[i]
         const a2 = assignments[j]
+        if (a1.pinned || a2.pinned) continue
         if (a1.employee_id === a2.employee_id) continue
 
         const emp1 = employees.find(e => e.id === a1.employee_id)!
@@ -187,8 +190,16 @@ function repairPass(
  * No I/O — all inputs are passed in.
  */
 export function generateSchedule(inputs: GeneratorInputs): GeneratorOutput {
-  const { month, employees, coverageRequirements, publicHolidays, timeOff, rules, carryForwardCounters } =
-    inputs
+  const {
+    month,
+    employees,
+    coverageRequirements,
+    publicHolidays,
+    timeOff,
+    rules,
+    carryForwardCounters,
+    pinnedAssignments,
+  } = inputs
 
   // 1. Build and order slots
   const allSlots = buildSlots(month, coverageRequirements, publicHolidays)
@@ -200,15 +211,54 @@ export function generateSchedule(inputs: GeneratorInputs): GeneratorOutput {
     if (!counters[emp.id]) counters[emp.id] = emptyCounters()
   }
 
-  // 3. Greedy assignment pass
+  // 3. Seed guaranteed (pinned) assignments before the greedy pass.
+  // Pins are honored as-is — isEligible is deliberately NOT run on them, since
+  // a pin is a manager override of the normal eligibility/fairness logic.
   const assignments: GeneratedAssignment[] = []
+  const unplaceablePins: UnplaceablePin[] = []
+
+  for (const pin of pinnedAssignments ?? []) {
+    const slot = allSlots.find(s => s.date === pin.date && s.shift_type === pin.shift_type)
+    if (!slot) {
+      unplaceablePins.push({
+        ...pin,
+        reason: `No ${pin.shift_type} slot on ${pin.date} for its day type`,
+      })
+      continue
+    }
+
+    const inSlot = slotAssignments(assignments, slot)
+    if (inSlot.some(a => a.employee_id === pin.employee_id)) continue // de-dupe
+
+    if (inSlot.length >= slot.headcount) {
+      unplaceablePins.push({
+        ...pin,
+        reason: 'Slot already full from other guaranteed shifts',
+      })
+      continue
+    }
+
+    const assignment: GeneratedAssignment = {
+      employee_id: pin.employee_id,
+      date: slot.date,
+      shift_type: slot.shift_type,
+      day_type: slot.day_type,
+      reason: 'Guaranteed shift',
+      pinned: true,
+    }
+    assignments.push(assignment)
+    updateCounters(counters, pin.employee_id, slot)
+  }
+
+  // 4. Greedy assignment pass
   const unfilledSlots: Slot[] = []
 
   for (const slot of orderedSlots) {
-    const alreadyInSlot: GeneratedAssignment[] = []
+    const alreadyInSlot: GeneratedAssignment[] = slotAssignments(assignments, slot)
     const needed = slot.headcount
+    const remaining = needed - alreadyInSlot.length
 
-    // Eligible employees for the first position in this slot
+    // Eligible employees for the first open position in this slot
     const candidates = employees.filter(emp =>
       isEligible(slot, emp, empAssignments(assignments, emp.id), alreadyInSlot, timeOff, rules, employees),
     )
@@ -221,7 +271,7 @@ export function generateSchedule(inputs: GeneratorInputs): GeneratorOutput {
       }))
       .sort((a, b) => a.score - b.score || a.emp.id.localeCompare(b.emp.id))
 
-    for (const { emp } of scored.slice(0, needed)) {
+    for (const { emp } of scored.slice(0, remaining)) {
       // Re-check eligibility each iteration because alreadyInSlot grows
       if (!isEligible(slot, emp, empAssignments(assignments, emp.id), alreadyInSlot, timeOff, rules, employees)) {
         continue
@@ -244,8 +294,8 @@ export function generateSchedule(inputs: GeneratorInputs): GeneratorOutput {
     }
   }
 
-  // 4. Local-search repair pass
+  // 5. Local-search repair pass
   repairPass(assignments, counters, employees, timeOff, rules)
 
-  return { assignments, fairnessSummary: counters, unfilledSlots }
+  return { assignments, fairnessSummary: counters, unfilledSlots, unplaceablePins }
 }
