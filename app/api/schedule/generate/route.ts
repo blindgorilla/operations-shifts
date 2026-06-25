@@ -267,7 +267,7 @@ export async function POST(request: Request) {
   // existing rows first and skip any that are already present.
   const { data: existingShifts } = await admin
     .from('shifts')
-    .select('date, shift_type')
+    .select('id, date, shift_type, is_published')
     .gte('date', periodStart)
     .lte('date', periodEnd)
 
@@ -286,6 +286,44 @@ export async function POST(request: Request) {
       .insert(newShiftRows.slice(i, i + BATCH))
     if (insertErr) {
       return NextResponse.json({ error: 'Failed to insert shifts', details: insertErr.message }, { status: 500 })
+    }
+  }
+
+  // Prune stale shift rows: shifts that exist for this period but are no longer
+  // required for that date's current day-type (e.g. a holiday was removed).
+  // Only unpublished, unassigned rows are eligible — assignments cascade-delete
+  // with their shift, so a row with any assignment must never be removed here.
+  const desiredKeys = new Set(
+    shiftRowsToUpsert.map((r) => `${r.date}|${r.shift_type}`)
+  )
+
+  const staleShifts = (existingShifts ?? []).filter(
+    (s: any) => !desiredKeys.has(`${s.date}|${s.shift_type}`) && s.is_published === false
+  )
+
+  if (staleShifts.length > 0) {
+    const staleShiftIds = staleShifts.map((s: any) => s.id)
+
+    const { data: staleAssignments } = await admin
+      .from('shift_assignments')
+      .select('shift_id')
+      .in('shift_id', staleShiftIds)
+
+    const assignedShiftIds = new Set(
+      (staleAssignments ?? []).map((a: any) => a.shift_id)
+    )
+
+    const deletableShiftIds = staleShiftIds.filter((id: string) => !assignedShiftIds.has(id))
+
+    for (let i = 0; i < deletableShiftIds.length; i += BATCH) {
+      const { error: deleteErr } = await admin
+        .from('shifts')
+        .delete()
+        .in('id', deletableShiftIds.slice(i, i + BATCH))
+        .eq('is_published', false)
+      if (deleteErr) {
+        return NextResponse.json({ error: 'Failed to prune stale shifts', details: deleteErr.message }, { status: 500 })
+      }
     }
   }
 
