@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { format, parseISO, addMonths, isWithinInterval } from 'date-fns'
 import ShiftCalendarClient from '@/components/calendar/ShiftCalendarClient'
 import SlotPanel from '@/components/manager/SlotPanel'
+import GuaranteedShiftsPanel from '@/components/manager/GuaranteedShiftsPanel'
 import { createClient } from '@/lib/supabase/client'
 import type { Employee, Shift, PublicHoliday } from '@/types'
 
@@ -745,6 +746,8 @@ export default function ScheduleGeneratorClient({ manager, employees }: Props) {
           onCancel={() => setMarkSickTarget(null)}
         />
       )}
+
+      <GuaranteedShiftsPanel month={month} employees={employees} />
 
       {/* Controls */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
