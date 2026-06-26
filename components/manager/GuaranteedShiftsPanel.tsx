@@ -63,6 +63,7 @@ export default function GuaranteedShiftsPanel({ month, employees }: Props) {
 
   useEffect(() => {
     setDate(monthBounds(month).min)
+    setFormError(null)
     fetchPins()
   }, [month, fetchPins])
 
@@ -91,6 +92,7 @@ export default function GuaranteedShiftsPanel({ month, employees }: Props) {
         setPinWarnings(prev => ({ ...prev, [data.pin.id]: data.warnings }))
       }
       setNote('')
+      setFormError(null)
       await fetchPins()
     } catch {
       setFormError('Network error -- please try again')
@@ -100,6 +102,7 @@ export default function GuaranteedShiftsPanel({ month, employees }: Props) {
   }
 
   async function handleRemove(id: string) {
+    setFormError(null)
     await fetch(`/api/pinned-assignments/${id}`, { method: 'DELETE' })
     setPinWarnings(prev => {
       const next = { ...prev }
@@ -128,7 +131,7 @@ export default function GuaranteedShiftsPanel({ month, employees }: Props) {
           <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Guard</label>
           <select
             value={employeeId}
-            onChange={e => setEmployeeId(e.target.value)}
+            onChange={e => { setEmployeeId(e.target.value); setFormError(null) }}
             className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B3A5C]"
           >
             {employees.map(e => (
@@ -143,7 +146,7 @@ export default function GuaranteedShiftsPanel({ month, employees }: Props) {
             value={date}
             min={monthMin}
             max={monthMax}
-            onChange={e => setDate(e.target.value)}
+            onChange={e => { setDate(e.target.value); setFormError(null) }}
             className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B3A5C]"
           />
         </div>
@@ -151,7 +154,7 @@ export default function GuaranteedShiftsPanel({ month, employees }: Props) {
           <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Shift</label>
           <select
             value={shiftType}
-            onChange={e => setShiftType(e.target.value)}
+            onChange={e => { setShiftType(e.target.value); setFormError(null) }}
             className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B3A5C]"
           >
             <option value="morning">Morning</option>
