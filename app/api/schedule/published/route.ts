@@ -73,7 +73,7 @@ export async function GET(request: Request) {
     assignment_count: countMap[s.id] ?? 0,
   }))
 
-  // Approved leave overlapping this period (for sick/absent flagging on the published view)
+  // Approved leave overlapping this period (for sick/annual flagging on the published view)
   const { data: leaveRaw } = await admin
     .from('time_off')
     .select('id, employee_id, start_date, end_date, type')

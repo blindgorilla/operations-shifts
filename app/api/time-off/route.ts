@@ -39,7 +39,7 @@ export async function POST(req: Request) {
   if (!employee_id || !type || !start_date || !end_date) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
-  if (!['absent', 'sick'].includes(type)) {
+  if (!['annual', 'sick'].includes(type)) {
     return NextResponse.json({ error: 'Invalid leave type' }, { status: 400 })
   }
   if (end_date < start_date) {

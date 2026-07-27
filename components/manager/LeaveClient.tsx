@@ -13,7 +13,7 @@ interface LeaveEntry {
   employee_id: string
   start_date: string
   end_date: string
-  type: 'absent' | 'sick'
+  type: 'annual' | 'sick'
   note: string | null
   created_at: string
 }
@@ -24,19 +24,19 @@ interface Props {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  absent: 'Absent leave',
+  annual: 'Annual leave',
   sick: 'Sick leave',
 }
 
 const TYPE_BADGE: Record<string, string> = {
-  absent: 'bg-amber-100 text-amber-800',
+  annual: 'bg-amber-100 text-amber-800',
   sick: 'bg-red-100 text-red-800',
 }
 
 export default function LeaveClient({ employees, initialLeave }: Props) {
   const [leave, setLeave] = useState<LeaveEntry[]>(initialLeave)
   const [guardId, setGuardId] = useState('')
-  const [type, setType] = useState<'absent' | 'sick'>('absent')
+  const [type, setType] = useState<'annual' | 'sick'>('annual')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [note, setNote] = useState('')
@@ -68,7 +68,7 @@ export default function LeaveClient({ employees, initialLeave }: Props) {
     const created: LeaveEntry = await res.json()
     setLeave((prev) => [created, ...prev].sort((a, b) => b.start_date.localeCompare(a.start_date)))
     setGuardId('')
-    setType('absent')
+    setType('annual')
     setStartDate('')
     setEndDate('')
     setNote('')
@@ -138,10 +138,10 @@ export default function LeaveClient({ employees, initialLeave }: Props) {
 
           <select
             value={type}
-            onChange={(e) => setType(e.target.value as 'absent' | 'sick')}
+            onChange={(e) => setType(e.target.value as 'annual' | 'sick')}
             className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
-            <option value="absent">Absent leave</option>
+            <option value="annual">Annual leave</option>
             <option value="sick">Sick leave</option>
           </select>
 
