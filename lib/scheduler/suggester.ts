@@ -185,18 +185,13 @@ function getIneligibilityReason(
   }
 
   const pairingRule = findRule('new_employee_pairing')
-  if (pairingRule && employee.is_new_employee) {
-    const dow = getDay(requestedDate)
-    const isFriday = dow === 5
-    const isSaturday = dow === 6
-    if (isFriday || isSaturday) {
-      const slotAwe: AssignmentWithEmployee[] = slotAssignmentsSoFar.flatMap(a => {
-        const emp = allEmployees.find(e => e.id === a.employee_id)
-        return emp ? [toAssignmentWithEmployee(a, emp)] : []
-      })
-      if (checkNewEmployeePairing(pairingRule, employee, slotAwe, isFriday, isSaturday)?.severity === 'error') {
-        return 'New-employee pairing not allowed — no experienced guard on this Fri/Sat slot'
-      }
+  if (pairingRule && employee.is_new_employee && slot.shift_type === 'night') {
+    const slotAwe: AssignmentWithEmployee[] = slotAssignmentsSoFar.flatMap(a => {
+      const emp = allEmployees.find(e => e.id === a.employee_id)
+      return emp ? [toAssignmentWithEmployee(a, emp)] : []
+    })
+    if (checkNewEmployeePairing(pairingRule, employee, slotAwe, slot.shift_type)?.severity === 'error') {
+      return 'New employee on a night shift needs an experienced guard (and no second new employee)'
     }
   }
 

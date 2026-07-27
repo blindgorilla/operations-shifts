@@ -256,29 +256,29 @@ export function generateSchedule(inputs: GeneratorInputs): GeneratorOutput {
   for (const slot of orderedSlots) {
     const alreadyInSlot: GeneratedAssignment[] = slotAssignments(assignments, slot)
     const needed = slot.headcount
-    const remaining = needed - alreadyInSlot.length
 
-    // Eligible employees for the first open position in this slot
-    const candidates = employees.filter(emp =>
-      isEligible(slot, emp, empAssignments(assignments, emp.id), alreadyInSlot, timeOff, rules, employees),
-    )
+    // Fill one seat at a time. Eligibility can depend on who already occupies
+    // the slot (e.g. a new employee only becomes eligible for a night seat once
+    // an experienced guard is present), so candidates are recomputed after each
+    // assignment against the current in-slot composition.
+    while (alreadyInSlot.length < needed) {
+      const candidates = employees.filter(emp =>
+        isEligible(slot, emp, empAssignments(assignments, emp.id), alreadyInSlot, timeOff, rules, employees),
+      )
 
-    // Score and sort ascending (lower = better)
-    const scored = candidates
-      .map(emp => ({
-        emp,
-        score: scoreCandidate(emp, slot, counters, alreadyInSlot, rules, employees),
-      }))
-      .sort((a, b) => a.score - b.score || a.emp.id.localeCompare(b.emp.id))
+      if (candidates.length === 0) break
 
-    for (const { emp } of scored.slice(0, remaining)) {
-      // Re-check eligibility each iteration because alreadyInSlot grows
-      if (!isEligible(slot, emp, empAssignments(assignments, emp.id), alreadyInSlot, timeOff, rules, employees)) {
-        continue
-      }
-      const reason = buildReason(emp, slot, counters, employees)
+      // Score and sort ascending (lower = better); pick the single best seat.
+      const best = candidates
+        .map(emp => ({
+          emp,
+          score: scoreCandidate(emp, slot, counters, alreadyInSlot, rules, employees),
+        }))
+        .sort((a, b) => a.score - b.score || a.emp.id.localeCompare(b.emp.id))[0].emp
+
+      const reason = buildReason(best, slot, counters, employees)
       const assignment: GeneratedAssignment = {
-        employee_id: emp.id,
+        employee_id: best.id,
         date: slot.date,
         shift_type: slot.shift_type,
         day_type: slot.day_type,
@@ -286,7 +286,7 @@ export function generateSchedule(inputs: GeneratorInputs): GeneratorOutput {
       }
       assignments.push(assignment)
       alreadyInSlot.push(assignment)
-      updateCounters(counters, emp.id, slot)
+      updateCounters(counters, best.id, slot)
     }
 
     if (alreadyInSlot.length < needed) {
