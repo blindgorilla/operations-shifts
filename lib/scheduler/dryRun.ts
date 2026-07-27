@@ -255,8 +255,6 @@ export function verifySchedule(
       const thisEnd   = getShiftEndDatetime(thisShift)
       const thisDate  = parseISO(a.date)
       const dow       = getDay(thisDate)
-      const isFriday  = dow === 5
-      const isSaturday = dow === 6
 
       // 1. Time-off conflict
       const onLeave = timeOff
@@ -296,15 +294,15 @@ export function verifySchedule(
       const weekCount = empList.filter(x => x.date >= weekStart && x.date <= weekEnd).length
       if (weekCount > 5) push('five_per_week', employee.name, a.date, a.shift_type, `${weekCount} shifts in week ${weekStart}–${weekEnd} (max 5)`)
 
-      // 7. Fri/Sat new-employee pairing
-      if (pairingRule && employee.is_new_employee && (isFriday || isSaturday)) {
+      // 7. Night-shift new-employee pairing (every day of the week)
+      if (pairingRule && employee.is_new_employee && a.shift_type === 'night') {
         const slotKey  = `${a.date}|${a.shift_type}`
         const coWorkers = (bySlot.get(slotKey) ?? []).filter(x => x.employee_id !== empId)
         const coAwe = coWorkers.flatMap(x => {
           const e = employees.find(emp => emp.id === x.employee_id)
           return e ? [toAwe(x, e)] : []
         })
-        const vP = checkNewEmployeePairing(pairingRule, employee, coAwe, isFriday, isSaturday)
+        const vP = checkNewEmployeePairing(pairingRule, employee, coAwe, a.shift_type)
         if (vP?.severity === 'error') push('new_employee_pairing', employee.name, a.date, a.shift_type, vP.message)
       }
 

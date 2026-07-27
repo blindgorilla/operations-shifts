@@ -48,8 +48,6 @@ export async function validateShiftRequest(input: ValidationInput): Promise<Rule
   const dayOfWeek = getDay(requestedDate)
   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
   const isHoliday = publicHolidays.includes(requestedShift.date)
-  const isFriday = dayOfWeek === 5
-  const isSaturday = dayOfWeek === 6
 
   for (const rule of rules as SchedulingRule[]) {
     try {
@@ -78,8 +76,7 @@ export async function validateShiftRequest(input: ValidationInput): Promise<Rule
             rule,
             employee,
             allAssignmentsOnShift,
-            isFriday,
-            isSaturday,
+            requestedShift.shift_type,
           )
           if (v) violations.push(v)
           break

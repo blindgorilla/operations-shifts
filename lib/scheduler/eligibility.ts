@@ -188,19 +188,16 @@ export function isEligible(
     if (checkConsecutiveDays(consRule, employee, existingAws, requestedDate)?.severity === 'error') return false
   }
 
-  // 7. New-employee pairing is HARD on Friday and Saturday
+  // 7. New-employee pairing is HARD on night shifts (every day of the week):
+  //    a new employee must be paired with an experienced guard and never with
+  //    another new employee.
   const pairingRule = findRule('new_employee_pairing')
-  if (pairingRule && employee.is_new_employee) {
-    const dow = getDay(requestedDate)
-    const isFriday = dow === 5
-    const isSaturday = dow === 6
-    if (isFriday || isSaturday) {
-      const slotAwe: AssignmentWithEmployee[] = slotAssignmentsSoFar.flatMap(a => {
-        const emp = allEmployees.find(e => e.id === a.employee_id)
-        return emp ? [toAssignmentWithEmployee(a, emp)] : []
-      })
-      if (checkNewEmployeePairing(pairingRule, employee, slotAwe, isFriday, isSaturday)?.severity === 'error') return false
-    }
+  if (pairingRule && employee.is_new_employee && slot.shift_type === 'night') {
+    const slotAwe: AssignmentWithEmployee[] = slotAssignmentsSoFar.flatMap(a => {
+      const emp = allEmployees.find(e => e.id === a.employee_id)
+      return emp ? [toAssignmentWithEmployee(a, emp)] : []
+    })
+    if (checkNewEmployeePairing(pairingRule, employee, slotAwe, slot.shift_type)?.severity === 'error') return false
   }
 
   return true

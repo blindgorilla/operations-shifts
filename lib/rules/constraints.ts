@@ -5,7 +5,7 @@
  */
 
 import { differenceInHours, parseISO, format, addDays } from 'date-fns'
-import type { Employee, Shift, ShiftAssignment, RuleViolation, SchedulingRule } from '@/types'
+import type { Employee, Shift, ShiftAssignment, RuleViolation, SchedulingRule, ShiftType } from '@/types'
 
 export type AssignmentWithShift = ShiftAssignment & { shift: Shift }
 export type AssignmentWithEmployee = ShiftAssignment & { employee: Employee }
@@ -156,34 +156,43 @@ export function checkConsecutiveNightsRest(
 
 // ---------------------------------------------------------------------------
 // Rule: new_employee_pairing
-// Hard on Friday/Saturday; otherwise follows rule.is_hard / rule.severity.
+// Night-shift rule (hard, every day of the week): a new employee must never be
+// alone on a night shift, must never be paired with another new employee, and
+// must always be paired with an experienced (non-new) guard. Non-night shifts
+// are unaffected.
 // ---------------------------------------------------------------------------
 
 export function checkNewEmployeePairing(
   rule: SchedulingRule,
   employee: Employee,
   allAssignmentsOnShift: AssignmentWithEmployee[],
-  isFriday: boolean,
-  isSaturday: boolean,
+  shiftType: ShiftType,
 ): RuleViolation | null {
   if (!employee.is_new_employee) return null
+  if (shiftType !== 'night') return null
 
-  const otherNew = allAssignmentsOnShift.filter(
-    (a) => a.employee.is_new_employee && a.employee_id !== employee.id,
-  )
-  if (otherNew.length === 0) return null
+  const others = allAssignmentsOnShift.filter((a) => a.employee_id !== employee.id)
+  const otherNew = others.filter((a) => a.employee.is_new_employee)
+  const hasExperienced = others.some((a) => !a.employee.is_new_employee)
 
-  const names = otherNew.map((a) => a.employee.name).join(', ')
-  const isStrictDay = isFriday || isSaturday
-  return {
-    rule: rule.name,
-    severity: isStrictDay ? 'error' : effectiveSeverity(rule),
-    message: `New employee(s) already on this shift: ${names}. ${
-      isStrictDay
-        ? 'Friday & Saturday pairings of new employees are not permitted.'
-        : 'Avoid pairing new employees on the same shift.'
-    }`,
+  if (otherNew.length > 0) {
+    const names = otherNew.map((a) => a.employee.name).join(', ')
+    return {
+      rule: rule.name,
+      severity: 'error',
+      message: `Two new employees cannot share a night shift (already on this shift: ${names}).`,
+    }
   }
+
+  if (!hasExperienced) {
+    return {
+      rule: rule.name,
+      severity: 'error',
+      message: 'A new employee on a night shift must be paired with an experienced guard.',
+    }
+  }
+
+  return null
 }
 
 // ---------------------------------------------------------------------------
