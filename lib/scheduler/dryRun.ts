@@ -164,7 +164,7 @@ function buildRunInputs(seed: number): RunInputs {
       employee_id: emp.id,
       start_date: startDate,
       end_date: endDate,
-      type: rng() < 0.5 ? 'absent' : 'sick',
+      type: rng() < 0.5 ? 'annual' : 'sick',
       status: 'approved',
     })
   }
